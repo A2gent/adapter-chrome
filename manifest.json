@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "A2gent Brute Browser Adapter",
+  "version": "0.1.0",
+  "description": "Create and continue local Brute sessions from the current browser page with diagnostic context.",
+  "action": {
+    "default_title": "Toggle A2gent diagnostics overlay"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "http://[::1]/*",
+    "https://localhost/*",
+    "https://127.0.0.1/*",
+    "https://[::1]/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/pageHook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/contentScript.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

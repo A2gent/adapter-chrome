@@ -96,6 +96,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-NF-UX-006 On desktop, the overlay shall open full-width at the bottom with a default height of 320 px and be resizable between 240 px and 640 px.
 - [ ] REQ-NF-UX-007 On narrower viewports, the overlay shall stay bottom-anchored and may grow up to 60% of viewport height.
 - [ ] REQ-NF-UX-008 Inline continuation shall automatically send a lightweight refreshed page-context package on every follow-up message and expose an explicit control for full diagnostic recapture.
+- [ ] REQ-NF-UX-009 Saved local Brute/agent URL and project-context settings shall be hidden by default in the overlay and only shown after the user explicitly opens Settings.
 
 ## Decisions
 - [x] DEC-001 The extension communicates directly with the Brute HTTP API.
@@ -113,6 +114,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-013 The automatic lightweight refresh payload contains only `captured_at`, current URL, current title, and selected text when present.
 - [x] DEC-014 The default local Brute base URL is `http://localhost:5445`, but the user may override it to another loopback URL.
 - [x] DEC-015 Diagnostic context is represented as machine-readable JSON embedded in message text, plus image attachments and session metadata labels.
+- [x] DEC-016 Saved local Brute/agent URL and project-context settings are not part of the default overlay view; the user must explicitly open Settings to view or change them.
 
 ## Implementation boundaries
 - [ ] BOUND-001 `adapter-chrome`: extension manifest, content-script overlay injection, overlay UI, project selection UI, local Brute URL setting, automatic URL matching, initial full capture, lightweight refresh, manual full recapture, and Brute chat/session integration.
@@ -156,3 +158,14 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 
 ## Implementation sessions
 - No implementation sessions have been created yet.
+
+## Implementation notes
+- Implemented MVP across `adapter-chrome`, `caesar`, and `brute` in the current implementation session.
+- Extension overlay now keeps the saved local Brute/agent URL and project-context controls hidden by default; **Settings** must be opened explicitly to view/change them, refresh projects, or save a new URL, and successful URL saves close the settings panel again.
+- `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.
+- `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.
+- `brute` now persists project URL patterns, exposes them through project APIs, accepts extension-created session metadata through existing session APIs, and defaults the HTTP API port to `5445` for local app/extension onboarding.
+- Verification completed:
+  - `adapter-chrome`: `node --check src/background.js`, `node --check src/pageHook.js`, `node --check src/contentScript.js`, `python3 -m json.tool manifest.json`.
+  - `caesar`: `npm run build`.
+  - `brute`: `go test ./internal/storage ./internal/http ./cmd/aagent`.
