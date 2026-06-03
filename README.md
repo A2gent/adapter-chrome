@@ -49,16 +49,16 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Visible-page screenshot as an image attachment.
 - DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
-- Browser-observed fetch/XHR network records, including request/response metadata and text-like bodies when technically available.
-- Performance/resource timing entries.
+- Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
+- Performance/resource timing entries limited to the latest 20 compact endpoint-level entries.
 
 The diagnostic bundle is embedded as a machine-readable JSON block in the Brute message text. Screenshots are sent as Brute image attachments. Created sessions include metadata labels such as `source: "adapter-chrome"` and `created_by: "adapter-chrome-extension"`, so Caesar can display that they came from the extension.
 
 ## Exclusions and sensitivity
 
-The extension intentionally does **not** collect or transmit cookies or browser storage state. It does not read `document.cookie`, `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or similar persisted browser storage. Cookie/Set-Cookie headers are also excluded from captured request/response headers.
+The extension intentionally does **not** collect or transmit cookies or browser storage state. It does not read `document.cookie`, `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or similar persisted browser storage. Network diagnostics also omit request/response headers, request/response bodies, URL query strings, and URL fragments.
 
-Aside from that explicit exclusion, the MVP diagnostic bundle may contain highly sensitive page data, including PII, tokens in non-cookie headers, page text, form text rendered in the DOM, screenshots, request bodies, and response bodies. Use it only with pages and local Brute instances you trust.
+Aside from those explicit exclusions, the MVP diagnostic bundle may contain highly sensitive page data, including PII, page text, form text rendered in the DOM, screenshots, console output, and runtime errors. Use it only with pages and local Brute instances you trust.
 
 ## Inline continuation
 

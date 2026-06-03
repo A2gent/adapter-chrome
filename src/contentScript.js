@@ -12,7 +12,8 @@
   const MAX_SELECTED_TEXT_FULL = 12000;
   const MAX_DOM_HTML = 180000;
   const MAX_DOM_TEXT = 60000;
-  const MAX_PERF_ENTRIES = 300;
+  const MAX_PERF_ENTRIES = 20;
+  const MAX_NETWORK_ENTRIES = 20;
 
   let host = null;
   let shadow = null;
@@ -241,6 +242,55 @@
     window.postMessage({ type: 'A2GENT_GET_PAGE_DIAGNOSTICS', requestId }, '*');
   });
 
+  const endpointFromUrl = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw, location.href);
+      // WHY: diagnostic network payloads were overwhelming model context.
+      // WHAT: keep endpoint identity while dropping query/fragment/body/header data.
+      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') {
+        return `${parsed.protocol}[omitted]`;
+      }
+      if (parsed.origin && parsed.origin !== 'null') {
+        return `${parsed.origin}${parsed.pathname || '/'}`;
+      }
+      return `${parsed.protocol}${parsed.pathname || ''}`;
+    } catch {
+      return raw.replace(/[?#].*$/, '');
+    }
+  };
+
+  const latestByCapturedAt = (entries, limit) => (Array.isArray(entries) ? entries : [])
+    .slice()
+    .sort((a, b) => (Date.parse(a?.captured_at || '') || 0) - (Date.parse(b?.captured_at || '') || 0))
+    .slice(-limit);
+
+  const compactNetworkActivity = (entries) => latestByCapturedAt(entries, MAX_NETWORK_ENTRIES)
+    .map((entry) => {
+      const out = {
+        captured_at: entry.captured_at || nowIso(),
+        type: entry.type || 'network',
+        method: String(entry.method || 'GET').toUpperCase(),
+        url: endpointFromUrl(entry.url),
+      };
+      const status = Number(entry.status);
+      if (Number.isFinite(status)) {
+        out.status = status;
+      }
+      if (entry.status_text) {
+        out.status_text = clip(entry.status_text, 160);
+      }
+      const durationMs = Number(entry.duration_ms);
+      if (Number.isFinite(durationMs)) {
+        out.duration_ms = Math.round(durationMs);
+      }
+      if (entry.error_message || entry.error) {
+        out.error_message = clip(entry.error_message || entry.error, 500);
+      }
+      return out;
+    });
+
   const captureScreenshot = async () => {
     const response = await chrome.runtime.sendMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' });
     if (!response || !response.ok || !response.dataUrl) {
@@ -248,22 +298,31 @@
     }
     return response.dataUrl;
   };
+  const performanceEntryName = (entry) => {
+    if (entry.entryType === 'resource' || entry.entryType === 'navigation') {
+      return endpointFromUrl(entry.name);
+    }
+    return String(entry.name || '');
+  };
 
   const collectPerformanceEntries = () => {
     try {
       return performance.getEntries()
         .filter((entry) => entry.entryType === 'navigation' || entry.entryType === 'resource' || entry.entryType === 'paint')
+        .sort((a, b) => a.startTime - b.startTime)
         .slice(-MAX_PERF_ENTRIES)
-        .map((entry) => ({
-          name: entry.name,
-          entry_type: entry.entryType,
-          initiator_type: entry.initiatorType || undefined,
-          start_time: Math.round(entry.startTime),
-          duration: Math.round(entry.duration),
-          transfer_size: entry.transferSize || undefined,
-          encoded_body_size: entry.encodedBodySize || undefined,
-          decoded_body_size: entry.decodedBodySize || undefined,
-        }));
+        .map((entry) => {
+          const out = {
+            name: performanceEntryName(entry),
+            entry_type: entry.entryType,
+            start_time: Math.round(entry.startTime),
+            duration: Math.round(entry.duration),
+          };
+          if (entry.initiatorType) {
+            out.initiator_type = entry.initiatorType;
+          }
+          return out;
+        });
     } catch {
       return [];
     }
@@ -323,10 +382,11 @@
         },
         console_logs: pageDiagnostics.console_logs || [],
         page_errors: pageDiagnostics.page_errors || [],
-        network_activity: pageDiagnostics.network_activity || [],
+        network_activity: compactNetworkActivity(pageDiagnostics.network_activity),
         exclusions: {
           cookies: 'excluded by specification; extension does not read document.cookie or Cookie/Set-Cookie headers',
           browser_storage: 'excluded by specification; extension does not read localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted storage',
+          network_details: 'network diagnostics are limited to latest 20 endpoint-level records and compact timing entries; request/response headers, bodies, URL query strings, and URL fragments are omitted',
         },
       },
     };
@@ -643,7 +703,7 @@
         </header>
         ${settingsPanel}
         <section class="warning">
-          Diagnosis sends a broad page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, DOM/text snapshot, console/errors and browser-observed network context. Cookies and browser storage are excluded.
+          Diagnosis sends a broad page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, DOM/text snapshot, console/errors and the latest 20 endpoint-level network records. Cookies, browser storage, network headers and request/response bodies are excluded.
         </section>
         ${state.sessionId ? renderContinuation(messages) : renderCreation()}
       </div>

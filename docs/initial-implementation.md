@@ -45,7 +45,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-014 Caesar and the extension shall use absolute `URLPattern`-compatible pattern strings in MVP, limited to literal URL components plus `*` wildcards. Advanced regex-like groups, custom token syntax, and named parameters are out of scope.
 - [ ] REQ-F-015 Pattern precedence shall be determined in this order: fewer wildcard usages wins; if tied, more literal characters wins; if tied, longer literal pathname wins; if still tied across different projects, the extension shall not auto-select any project and shall require manual user choice.
 - [ ] REQ-F-016 The initial full diagnostic bundle shall include at minimum the current page URL, page title, user-entered prompt text, selected text when present, and a screenshot of the active page.
-- [ ] REQ-F-017 The MVP shall attempt maximum technically feasible capture for all approved diagnostic categories, including page/DOM snapshot data, console logs, runtime/page errors, network activity records, request/response metadata, request/response bodies, and other browser-observable state relevant to diagnosis, while excluding cookies and browser storage.
+- [ ] REQ-F-017 The MVP shall attempt maximum technically feasible capture for approved non-network diagnostic categories. Network diagnostics shall be intentionally bounded to the latest 20 endpoint-level fetch/XHR records and compact performance/resource timing entries, omitting request/response headers, request/response bodies, URL query strings, and URL fragments to keep model context manageable.
 - [ ] REQ-F-018 Maximum capture of approved diagnostic categories shall be the default diagnosis behavior rather than an optional advanced mode.
 - [ ] REQ-F-019 The extension shall not collect or transmit cookies or browser storage state, including localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted browser storage.
 - [ ] REQ-F-020 Inline continuation shall use a hybrid diagnostic-refresh approach.
@@ -115,6 +115,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-014 The default local Brute base URL is `http://localhost:5445`, but the user may override it to another loopback URL.
 - [x] DEC-015 Diagnostic context is represented as machine-readable JSON embedded in message text, plus image attachments and session metadata labels.
 - [x] DEC-016 Saved local Brute/agent URL and project-context settings are not part of the default overlay view; the user must explicitly open Settings to view or change them.
+- [x] DEC-017 Network diagnostics are context-size bounded: send only the latest 20 endpoint-level fetch/XHR records and compact timing entries, ordered by time, without request/response headers, request/response bodies, URL query strings, or URL fragments.
 
 ## Implementation boundaries
 - [ ] BOUND-001 `adapter-chrome`: extension manifest, content-script overlay injection, overlay UI, project selection UI, local Brute URL setting, automatic URL matching, initial full capture, lightweight refresh, manual full recapture, and Brute chat/session integration.
@@ -138,7 +139,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 
 ## Ambiguities / risks
 - [ ] RISK-001 The current Caesar and Brute project models do not include URL-pattern mapping, so automatic project detection requires cross-repo schema, API, storage, and UI changes.
-- [ ] RISK-002 Even with cookies/storage excluded, the approved broad-diagnostics direction means sessions may still contain highly sensitive data such as tokens in headers, request bodies, page content, screenshots, or PII, increasing exposure risk in Brute, Caesar, exports, logs, and downstream agent processing.
+- [ ] RISK-002 Even with cookies/storage and detailed network payloads excluded, the approved broad-diagnostics direction means sessions may still contain highly sensitive data such as page content, screenshots, console output, runtime errors, or PII, increasing exposure risk in Brute, Caesar, exports, logs, and downstream agent processing.
 - [ ] RISK-003 The local/no-auth design reduces setup friction but makes any local Brute HTTP listener highly sensitive; loopback-only exposure and any remaining origin constraints must be implemented carefully.
 - [ ] RISK-004 The current Brute CLI defaults to a random HTTP port unless configured; the MVP must standardize or clearly document how the extension discovers or is pointed to the correct local base URL.
 - [ ] RISK-005 An injected bottom overlay can conflict with page layout, z-index, focus management, CSP restrictions, shadow DOM usage, and site-specific styling unless the implementation isolates itself carefully.
@@ -165,6 +166,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.
 - `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.
 - `brute` now persists project URL patterns, exposes them through project APIs, accepts extension-created session metadata through existing session APIs, and defaults the HTTP API port to `5445` for local app/extension onboarding.
+- Network diagnostics were reduced to the latest 20 endpoint-level records and compact timing entries. The extension now omits request/response headers, request/response bodies, URL query strings, and URL fragments from network context to keep prompts model-sized.
 - Verification completed:
   - `adapter-chrome`: `node --check src/background.js`, `node --check src/pageHook.js`, `node --check src/contentScript.js`, `python3 -m json.tool manifest.json`.
   - `caesar`: `npm run build`.
