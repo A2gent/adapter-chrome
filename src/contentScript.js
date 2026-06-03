@@ -9,6 +9,7 @@
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
+  const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
   const MAX_SELECTED_TEXT_LIGHT = 4000;
   const MAX_SELECTED_TEXT_FULL = 12000;
   const MAX_DOM_HTML = 180000;
@@ -85,16 +86,58 @@
     return '';
   };
 
-  const focusPrimaryControl = () => {
-    if (!state.open || !shadow) return;
-    const role = state.sessionId ? 'followup' : 'prompt';
+  const isFocusableOverlayControl = (element) => (
+    element
+    && typeof element.getAttribute === 'function'
+    && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(element.tagName)
+  );
+
+  const readOverlayFocusSnapshot = () => {
+    if (!shadow || !state.open) return null;
+    const active = shadow.activeElement;
+    if (!isFocusableOverlayControl(active)) return null;
+
+    const snapshot = {
+      role: active.getAttribute('data-role') || '',
+      tagName: active.tagName,
+    };
+    if (typeof active.selectionStart === 'number' && typeof active.selectionEnd === 'number') {
+      snapshot.selectionStart = active.selectionStart;
+      snapshot.selectionEnd = active.selectionEnd;
+      snapshot.selectionDirection = active.selectionDirection || 'none';
+    }
+    return snapshot.role ? snapshot : null;
+  };
+
+  const focusOverlayControl = (role, selection = null) => {
+    if (!state.open || !shadow || !role) return;
     const target = shadow.querySelector(`[data-role="${role}"]`);
     if (!target || typeof target.focus !== 'function') return;
     target.focus({ preventScroll: true });
-    if (typeof target.setSelectionRange === 'function') {
-      const end = String(target.value || '').length;
-      target.setSelectionRange(end, end);
+    if (selection && typeof target.setSelectionRange === 'function') {
+      const valueLength = String(target.value || '').length;
+      const start = Math.min(selection.selectionStart ?? valueLength, valueLength);
+      const end = Math.min(selection.selectionEnd ?? start, valueLength);
+      target.setSelectionRange(start, end, selection.selectionDirection || 'none');
     }
+  };
+
+  const restoreOverlayFocusSnapshot = (snapshot) => {
+    if (!snapshot) return;
+    focusOverlayControl(snapshot.role, snapshot);
+    window.requestAnimationFrame(() => focusOverlayControl(snapshot.role, snapshot));
+  };
+
+  const isOverlayRoleFocused = (role) => (
+    state.open
+    && document.activeElement === host
+    && shadow?.activeElement?.getAttribute?.('data-role') === role
+  );
+
+  const focusPrimaryControl = () => {
+    if (!state.open || !shadow) return;
+    const role = state.sessionId ? 'followup' : 'prompt';
+    focusOverlayControl(role, { selectionStart: Number.MAX_SAFE_INTEGER, selectionEnd: Number.MAX_SAFE_INTEGER });
   };
 
   const handleOverlayKeyboardEvent = (event) => {
@@ -104,7 +147,7 @@
     if (event.type === 'keydown' && role === 'followup' && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      void sendFollowup();
+      window.dispatchEvent(new CustomEvent(OVERLAY_SEND_FOLLOWUP_EVENT));
       return;
     }
 
@@ -634,11 +677,17 @@
     setState({ busy: true, followup: '', status: 'Sending message with lightweight page context...', error: '' });
     try {
       await sendStreamMessage(state.sessionId, createFollowupMessage(prompt, lightweight), []);
+      const shouldReturnToFollowup = isOverlayRoleFocused('followup');
       setState({ busy: false, status: 'Session updated' });
+      if (shouldReturnToFollowup) {
+        window.requestAnimationFrame(() => focusOverlayControl('followup'));
+      }
     } catch (error) {
       setState({ busy: false, status: 'Error', error: error instanceof Error ? error.message : String(error) });
     }
   };
+
+  window.addEventListener(OVERLAY_SEND_FOLLOWUP_EVENT, () => void sendFollowup());
 
   const openSessionDetail = () => {
     const sessionId = String(state.sessionId || '').trim();
@@ -771,6 +820,9 @@
       </section>
     ` : '';
 
+    // WHY: full shadow DOM replacement destroys the focused textarea/input.
+    // WHAT: remember the overlay control and selection so YouTube/player focus is not restored while the user types.
+    const focusSnapshot = readOverlayFocusSnapshot();
     shadow.innerHTML = `
       <style>${styles()}</style>
       <div class="panel" role="dialog" aria-label="A2gent browser diagnostics">
@@ -792,6 +844,7 @@
       </div>
     `;
     attachEvents();
+    restoreOverlayFocusSnapshot(focusSnapshot);
     if (shouldFocusPrimaryControl) {
       shouldFocusPrimaryControl = false;
       window.requestAnimationFrame(focusPrimaryControl);

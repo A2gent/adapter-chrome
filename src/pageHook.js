@@ -1,11 +1,77 @@
 (() => {
+  const MAX_LOGS = 400;
+  const MAX_NETWORK = 20;
+  const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
+
+  const installKeyboardShield = () => {
+    if (window.__A2GENT_BROWSER_ADAPTER_KEYBOARD_SHIELDED__) {
+      return;
+    }
+    window.__A2GENT_BROWSER_ADAPTER_KEYBOARD_SHIELDED__ = true;
+
+    const overlayEventPath = (event) => {
+      try {
+        return typeof event.composedPath === 'function' ? event.composedPath() : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const getOverlayHost = () => document.getElementById('a2gent-browser-adapter-root');
+
+    const isOverlayOpen = (host) => {
+      if (!host || !host.isConnected) return false;
+      try {
+        return window.getComputedStyle(host).display !== 'none';
+      } catch {
+        return false;
+      }
+    };
+
+    const isOverlayKeyboardEvent = (event, host) => {
+      const path = overlayEventPath(event);
+      if (path.includes(host)) return true;
+      return event.target === host || (event.target instanceof Node && host.contains(event.target));
+    };
+
+    const overlayEventRole = (event) => {
+      for (const node of overlayEventPath(event)) {
+        if (node && typeof node.getAttribute === 'function') {
+          const role = node.getAttribute('data-role');
+          if (role) return role;
+        }
+      }
+      return '';
+    };
+
+    const handleOverlayKeyboardEvent = (event) => {
+      const host = getOverlayHost();
+      if (!isOverlayOpen(host) || !isOverlayKeyboardEvent(event, host)) return;
+
+      if (event.type === 'keydown' && overlayEventRole(event) === 'followup' && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent(OVERLAY_SEND_FOLLOWUP_EVENT));
+      }
+
+      // WHY: site shortcut handlers such as YouTube's live in the page's MAIN world, where
+      // Shadow DOM retargeting can make overlay textarea keystrokes look like page-level keys.
+      // WHAT: stop overlay-originated key events in MAIN world without preventing normal text editing.
+      event.stopImmediatePropagation();
+    };
+
+    for (const eventType of ['keydown', 'keypress', 'keyup']) {
+      window.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
+      document.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
+    }
+  };
+
+  installKeyboardShield();
+
   if (window.__A2GENT_BROWSER_ADAPTER_HOOKED__) {
     return;
   }
   window.__A2GENT_BROWSER_ADAPTER_HOOKED__ = true;
 
-  const MAX_LOGS = 400;
-  const MAX_NETWORK = 20;
   const logs = [];
   const errors = [];
   const network = [];

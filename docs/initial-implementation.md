@@ -172,6 +172,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.
 - `brute` now persists project URL patterns, exposes them through project APIs, accepts extension-created session metadata through existing session APIs, and defaults the HTTP API port to `5445` for local app/extension onboarding.
 - Network diagnostics were reduced to the latest 20 endpoint-level records and compact timing entries. The extension now omits request/response headers, request/response bodies, URL query strings, and URL fragments from network context to keep prompts model-sized.
+- Overlay keyboard isolation now uses both a page MAIN-world keyboard shield and isolated content-script listeners, and the overlay preserves focused controls/selection across Shadow DOM re-renders so host pages such as YouTube do not regain focus or receive typing shortcuts while the user edits extension text fields.
 - Verification completed:
   - `adapter-chrome`: `node --check src/background.js`, `node --check src/pageHook.js`, `node --check src/contentScript.js`, `python3 -m json.tool manifest.json`.
   - `caesar`: `npm run build`.
