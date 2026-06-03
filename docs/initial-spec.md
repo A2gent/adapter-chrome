@@ -47,7 +47,9 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-016 The MVP shall attempt maximum technically feasible capture for all approved diagnostic categories, including page/DOM snapshot data, console logs, runtime/page errors, network activity records, request/response metadata, request/response bodies, and other browser-observable state relevant to diagnosis, while excluding cookies and browser storage.
 - [ ] REQ-F-017 Maximum capture of approved diagnostic categories shall be the default diagnosis behavior rather than an optional advanced mode.
 - [ ] REQ-F-018 The extension shall not collect or transmit cookies or browser storage state, including localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted browser storage.
-- [ ] REQ-F-019 Inline continuation shall use a hybrid diagnostic-refresh approach rather than initial-only capture or full recapture on every message. The exact hybrid policy is not yet defined.
+- [ ] REQ-F-019 Inline continuation shall use a hybrid diagnostic-refresh approach.
+- [ ] REQ-F-020 Each follow-up user message in inline continuation shall automatically include a lightweight refreshed page-context package. The exact contents of that lightweight package are not yet defined.
+- [ ] REQ-F-021 The extension shall let the user explicitly trigger a full recapture of the maximum diagnostic bundle during inline continuation.
 
 ### Non-functional
 #### Performance
@@ -80,6 +82,9 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-NF-UX-003 The overlay must clearly communicate that the diagnosis flow can send a broad diagnostic bundle from the active page to Brute.
 - [ ] REQ-NF-UX-004 The MVP primary UI surface shall be an in-page bottom overlay injected by the extension, not a browser-managed side panel.
 - [ ] REQ-NF-UX-005 Clicking the extension icon should toggle the bottom overlay open and closed on the active page.
+- [ ] REQ-NF-UX-006 The overlay should preserve page context while staying usable for inline session continuation; exact sizing and responsive behavior are not yet defined.
+- [ ] REQ-NF-UX-007 Inline continuation shall automatically send a lightweight refreshed page-context package on every follow-up message and expose an explicit control for full diagnostic recapture.
+
 ## Decisions
 - [x] DEC-001 The extension communicates directly with the Brute HTTP API.
 - [x] DEC-002 The MVP primary interaction surface is an in-page bottom overlay injected by the extension. Clicking the extension icon should toggle the overlay on the active page.
@@ -90,7 +95,8 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-007 Cookies and browser storage are explicitly out of scope for diagnostic capture, even in the maximum-diagnostics direction.
 - [x] DEC-008 The specification and implementation scope explicitly spans coordinated changes across all three repositories: `adapter-chrome`, `caesar`, and `brute`.
 - [x] DEC-009 Inline continuation uses a hybrid diagnostic-refresh model rather than initial-only capture or full recapture on every message.
-- [x] DEC-007 Cookies and browser storage are explicitly out of scope for diagnostic capture, even in the maximum-diagnostics direction.
+- [x] DEC-010 The approved hybrid refresh policy is lightweight automatic refresh on every follow-up message plus explicit user-triggered full recapture.
+
 ## Open questions
 - [x] Q-001 Approved communication model: direct to Brute HTTP API.
 - [x] Q-002 Approved MVP scope for inline sessions: create + continue inline conversation inside the extension.
@@ -102,8 +108,9 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] Q-008 Approved authentication model: no auth on the local extension-to-Brute connection.
 - [x] Q-009 Approved precedence rule: most specific matching project URL pattern wins.
 - [x] Q-010 Approved refresh direction: hybrid diagnostic capture during inline continuation.
-- [ ] Q-011 What exact hybrid refresh policy should be used during inline continuation: lightweight automatic refresh every message + explicit full recapture, refresh on page-change only, or another hybrid rule?
-- [ ] Q-010 During inline continuation, should the extension attach fresh page diagnostics on every user message, only on the initial message, only on explicit recapture, or via a hybrid approach?
+- [x] Q-011 Approved hybrid refresh policy: lightweight automatic refresh every message + explicit manual full recapture.
+- [ ] Q-012 What exact URL-pattern syntax and tie-break behavior should Caesar and the extension support (for example URLPattern syntax, wildcard-only syntax, or another constrained format)?
+- [ ] Q-013 What exact fields belong in the lightweight automatic refresh package attached to every follow-up message?
 
 ## Ambiguities / risks
 - [ ] RISK-001 The current Caesar and Brute project models do not include URL-pattern mapping, so automatic project detection requires cross-repo schema, API, storage, and UI changes.
@@ -112,6 +119,9 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] RISK-004 The approved direct-to-Brute architecture still requires coordinated Caesar and Brute changes for project pattern configuration, API/storage support, and later session visibility.
 - [ ] RISK-005 An injected bottom overlay can conflict with page layout, z-index, focus management, CSP restrictions, shadow DOM usage, and site-specific styling unless the implementation isolates itself carefully.
 - [ ] RISK-006 Full URL pattern matching can become confusing or brittle unless the pattern syntax, validation, and precedence rules are strictly defined.
+- [ ] RISK-007 Capturing "as much as possible" may require elevated Chrome extension capabilities and can materially increase implementation complexity, performance impact, and Chrome Web Store review sensitivity.
+- [ ] RISK-008 Existing Brute follow-up chat APIs currently accept message text and images, but not arbitrary structured diagnostic payloads per follow-up message, so richer continuation context may require API extensions or text-encoding conventions.
+
 ## Acceptance criteria
 - [ ] AC-001 The specification explicitly defines the direct-to-local-Brute no-auth connection model, including any localhost/CORS constraints.
 - [ ] AC-002 The specification explicitly defines the MVP user flows and bottom-overlay UX.
@@ -120,9 +130,6 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] AC-005 The specification explicitly lists required changes by repository (`adapter-chrome`, `caesar`, `brute`).
 - [ ] AC-006 The specification explicitly defines how extension-created sessions appear in Caesar and how they are represented in Brute metadata.
 - [ ] AC-007 The specification explicitly defines the hybrid diagnostic-refresh policy used during inline continuation.
-- [ ] AC-008 All open questions that block implementation are resolved or intentionally deferred with approved scope cuts.
-- [ ] AC-006 The specification explicitly defines how extension-created sessions appear in Caesar and how they are represented in Brute metadata.
-- [ ] AC-007 The specification explicitly defines when fresh page diagnostics are captured during inline continuation.
 - [ ] AC-008 All open questions that block implementation are resolved or intentionally deferred with approved scope cuts.
 
 ## Implementation sessions
