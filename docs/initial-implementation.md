@@ -43,7 +43,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-012 When the current page matches a configured project URL pattern, the extension shall auto-select that project before the user submits a new session.
 - [ ] REQ-F-013 When multiple projects match the current page URL, the unique most specific matching pattern shall win.
 - [ ] REQ-F-014 Caesar and the extension shall use absolute `URLPattern`-compatible pattern strings in MVP, limited to literal URL components plus `*` wildcards. Advanced regex-like groups, custom token syntax, and named parameters are out of scope.
-- [ ] REQ-F-015 Pattern precedence shall be determined in this order: fewer wildcard usages wins; if tied, more literal characters wins; if tied, longer literal pathname wins; if still tied across different projects, the extension shall not auto-select any project and shall require manual user choice.
+- [ ] REQ-F-015 Pattern precedence shall be determined in this order: fewer wildcard usages wins; if tied, more literal characters wins; if tied, longer literal pathname wins; if still tied across different projects, URL auto-detection shall produce no winner and the extension shall use the default project fallback when available.
 - [ ] REQ-F-016 The initial full diagnostic bundle shall include at minimum the current page URL, page title, user-entered prompt text, selected text when present, and a screenshot of the active page.
 - [ ] REQ-F-017 The MVP shall attempt maximum technically feasible capture for approved non-network diagnostic categories. Network diagnostics shall be intentionally bounded to the latest 20 endpoint-level fetch/XHR records and compact performance/resource timing entries, omitting request/response headers, request/response bodies, URL query strings, and URL fragments to keep model context manageable.
 - [ ] REQ-F-018 Maximum capture of approved diagnostic categories shall be the default diagnosis behavior rather than an optional advanced mode.
@@ -54,6 +54,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-023 The extension shall let the user explicitly trigger a full recapture of the maximum diagnostic bundle during inline continuation.
 - [ ] REQ-F-024 The extension shall default the Brute base URL to `http://localhost:5445` and allow the user to override it to another loopback URL.
 - [ ] REQ-F-025 The MVP shall encode diagnostic context as a machine-readable JSON block embedded in the message text sent to Brute, with screenshots attached as images and extension/session source labels stored in session metadata.
+- [ ] REQ-F-026 When URL-pattern detection does not produce a unique selected project, the extension shall default new sessions to Brute's built-in `Knowledge Base` project (`system-kb`) when that project is available.
 
 ### Non-functional
 #### Performance
@@ -97,6 +98,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-NF-UX-007 On narrower viewports, the overlay shall stay bottom-anchored and may grow up to 60% of viewport height.
 - [ ] REQ-NF-UX-008 Inline continuation shall automatically send a lightweight refreshed page-context package on every follow-up message and expose an explicit control for full diagnostic recapture.
 - [ ] REQ-NF-UX-009 Saved local Brute/agent URL and project-context settings shall be hidden by default in the overlay and only shown after the user explicitly opens Settings.
+- [ ] REQ-NF-UX-010 Keyboard input and text editing inside the injected overlay shall not trigger host-page keyboard shortcuts, navigation, or media playback controls.
 
 ## Decisions
 - [x] DEC-001 The extension communicates directly with the Brute HTTP API.
@@ -110,7 +112,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-009 Inline continuation uses a hybrid diagnostic-refresh model rather than initial-only capture or full recapture on every message.
 - [x] DEC-010 The approved hybrid refresh policy is lightweight automatic refresh on every follow-up message plus explicit user-triggered full recapture.
 - [x] DEC-011 MVP URL patterns use absolute `URLPattern`-compatible strings with `*` wildcards only.
-- [x] DEC-012 Pattern resolution uses unique most-specific match wins; exact cross-project ties fall back to manual selection.
+- [x] DEC-012 Pattern resolution uses unique most-specific match wins; exact cross-project ties do not auto-select a URL-matched project and instead use the Knowledge Base default fallback when available.
 - [x] DEC-013 The automatic lightweight refresh payload contains only `captured_at`, current URL, current title, and selected text when present.
 - [x] DEC-014 The default local Brute base URL is `http://localhost:5445`, but the user may override it to another loopback URL.
 - [x] DEC-015 Diagnostic context is represented as machine-readable JSON embedded in message text, plus image attachments and session metadata labels.
@@ -163,6 +165,8 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 ## Implementation notes
 - Implemented MVP across `adapter-chrome`, `caesar`, and `brute` in the current implementation session.
 - Extension overlay now keeps the saved local Brute/agent URL and project-context controls hidden by default; **Settings** must be opened explicitly to view/change them, refresh projects, or save a new URL, and successful URL saves close the settings panel again.
+- The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
+- Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.
 - `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.
 - `brute` now persists project URL patterns, exposes them through project APIs, accepts extension-created session metadata through existing session APIs, and defaults the HTTP API port to `5445` for local app/extension onboarding.

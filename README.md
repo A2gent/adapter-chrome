@@ -19,6 +19,10 @@ This repository contains an unpacked Chrome MV3 extension for creating and conti
 
 The extension defaults to `http://localhost:5445`. Connection and project-context controls are hidden during the normal diagnosis flow; click **Settings** in the overlay when you need to override the local endpoint, refresh projects, or change the selected project. The endpoint remains loopback-only: `localhost`, `127.0.0.1`, or `::1` over HTTP/HTTPS. No authentication is used; this is intentionally a local-machine trust model.
 
+## Host page event isolation
+
+The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay.
+
 ## Project URL patterns
 
 Project auto-detection is configured in Caesar under **Project Settings → Browser URL auto-detection**.
@@ -66,4 +70,5 @@ After the initial session is created, the overlay stays in an inline continuatio
 
 - Each follow-up message automatically includes a lightweight refreshed JSON context containing `captured_at`, current URL, current title, and current selected text trimmed to 4,000 characters.
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
-- The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot.
+- The **Open Session** button opens the created session in Caesar's browser session detail view.
+- The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot from the continuation buttons row.
