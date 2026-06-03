@@ -19,6 +19,10 @@ This repository contains an unpacked Chrome MV3 extension for creating and conti
 
 The extension defaults to `http://localhost:5445`. Connection and project-context controls are hidden during the normal diagnosis flow; click **Settings** in the overlay when you need to override the local endpoint, refresh projects, or change the selected project. The endpoint remains loopback-only: `localhost`, `127.0.0.1`, or `::1` over HTTP/HTTPS. No authentication is used; this is intentionally a local-machine trust model.
 
+## Host page event isolation
+
+The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay.
+
 ## Project URL patterns
 
 Project auto-detection is configured in Caesar under **Project Settings → Browser URL auto-detection**.
@@ -49,16 +53,16 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Visible-page screenshot as an image attachment.
 - DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
-- Browser-observed fetch/XHR network records, including request/response metadata and text-like bodies when technically available.
-- Performance/resource timing entries.
+- Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
+- Performance/resource timing entries limited to the latest 20 compact endpoint-level entries.
 
 The diagnostic bundle is embedded as a machine-readable JSON block in the Brute message text. Screenshots are sent as Brute image attachments. Created sessions include metadata labels such as `source: "adapter-chrome"` and `created_by: "adapter-chrome-extension"`, so Caesar can display that they came from the extension.
 
 ## Exclusions and sensitivity
 
-The extension intentionally does **not** collect or transmit cookies or browser storage state. It does not read `document.cookie`, `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or similar persisted browser storage. Cookie/Set-Cookie headers are also excluded from captured request/response headers.
+The extension intentionally does **not** collect or transmit cookies or browser storage state. It does not read `document.cookie`, `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or similar persisted browser storage. Network diagnostics also omit request/response headers, request/response bodies, URL query strings, and URL fragments.
 
-Aside from that explicit exclusion, the MVP diagnostic bundle may contain highly sensitive page data, including PII, tokens in non-cookie headers, page text, form text rendered in the DOM, screenshots, request bodies, and response bodies. Use it only with pages and local Brute instances you trust.
+Aside from those explicit exclusions, the MVP diagnostic bundle may contain highly sensitive page data, including PII, page text, form text rendered in the DOM, screenshots, console output, and runtime errors. Use it only with pages and local Brute instances you trust.
 
 ## Inline continuation
 
@@ -66,4 +70,5 @@ After the initial session is created, the overlay stays in an inline continuatio
 
 - Each follow-up message automatically includes a lightweight refreshed JSON context containing `captured_at`, current URL, current title, and current selected text trimmed to 4,000 characters.
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
-- The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot.
+- The **Open Session** button opens the created session in Caesar's browser session detail view.
+- The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot from the continuation buttons row.

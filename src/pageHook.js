@@ -5,7 +5,7 @@
   window.__A2GENT_BROWSER_ADAPTER_HOOKED__ = true;
 
   const MAX_LOGS = 400;
-  const MAX_NETWORK = 200;
+  const MAX_NETWORK = 20;
   const logs = [];
   const errors = [];
   const network = [];
@@ -34,6 +34,60 @@
   };
 
   const serializeArgs = (args) => args.map((arg) => clip(arg, 4000));
+
+  const endpointFromUrl = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw, window.location.href);
+      // WHY: request query strings/fragments can be large and often contain tokens.
+      // WHAT: keep only the endpoint identity so diagnostics stay model-sized.
+      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') {
+        return `${parsed.protocol}[omitted]`;
+      }
+      if (parsed.origin && parsed.origin !== 'null') {
+        return `${parsed.origin}${parsed.pathname || '/'}`;
+      }
+      return `${parsed.protocol}${parsed.pathname || ''}`;
+    } catch {
+      return raw.replace(/[?#].*$/, '');
+    }
+  };
+
+  const compactNetworkEntry = (entry) => {
+    const out = {
+      captured_at: new Date().toISOString(),
+      type: entry.type || 'network',
+      method: String(entry.method || 'GET').toUpperCase(),
+      url: endpointFromUrl(entry.url),
+    };
+    const status = Number(entry.status);
+    if (Number.isFinite(status)) {
+      out.status = status;
+    }
+    if (entry.statusText) {
+      out.status_text = clip(entry.statusText, 160);
+    }
+    const durationMs = Number(entry.durationMs);
+    if (Number.isFinite(durationMs)) {
+      out.duration_ms = Math.round(durationMs);
+    }
+    if (entry.error) {
+      out.error_message = clip(entry.error instanceof Error ? entry.error.message || String(entry.error) : entry.error, 500);
+    }
+    return out;
+  };
+
+  const latestNetwork = () => network
+    .slice()
+    .sort((a, b) => (Date.parse(a.captured_at || '') || 0) - (Date.parse(b.captured_at || '') || 0))
+    .slice(-MAX_NETWORK);
+
+  const recordNetwork = (entry) => {
+    // WHY: full request/response headers and bodies made diagnostic prompts too large.
+    // WHAT: retain only the latest compact endpoint-level records for the model.
+    pushBounded(network, compactNetworkEntry(entry), MAX_NETWORK);
+  };
 
   for (const level of ['debug', 'info', 'log', 'warn', 'error']) {
     const original = console[level];
@@ -68,72 +122,30 @@
     }, MAX_LOGS);
   });
 
-  const cloneHeaders = (headers) => {
-    const out = {};
-    try {
-      if (!headers) return out;
-      new Headers(headers).forEach((value, key) => {
-        // Cookies are explicitly excluded by the product spec.
-        if (key.toLowerCase() !== 'cookie' && key.toLowerCase() !== 'set-cookie') {
-          out[key] = value;
-        }
-      });
-    } catch {
-      // Ignore opaque header shapes.
-    }
-    return out;
-  };
-
-  const recordNetwork = (entry) => pushBounded(network, entry, MAX_NETWORK);
-
   const originalFetch = window.fetch;
   if (typeof originalFetch === 'function') {
     window.fetch = async function a2gentFetchProxy(input, init = undefined) {
       const startedAt = Date.now();
       const method = (init && init.method) || (input && input.method) || 'GET';
       const url = typeof input === 'string' ? input : (input && input.url) || '';
-      const requestHeaders = cloneHeaders((init && init.headers) || (input && input.headers));
-      let requestBody = '';
-      if (init && init.body && typeof init.body === 'string') {
-        requestBody = clip(init.body, 16000);
-      }
       try {
         const response = await originalFetch.apply(this, arguments);
-        const clone = response.clone();
-        const responseHeaders = cloneHeaders(clone.headers);
-        let responseBody = '';
-        try {
-          const contentType = clone.headers.get('content-type') || '';
-          if (/json|text|xml|html|javascript|css/i.test(contentType)) {
-            responseBody = clip(await clone.text(), 32000);
-          }
-        } catch {
-          responseBody = '';
-        }
         recordNetwork({
-          captured_at: new Date().toISOString(),
           type: 'fetch',
           url,
           method,
-          request_headers: requestHeaders,
-          request_body: requestBody,
           status: response.status,
-          status_text: response.statusText,
-          response_headers: responseHeaders,
-          response_body: responseBody,
-          duration_ms: Date.now() - startedAt,
+          statusText: response.statusText,
+          durationMs: Date.now() - startedAt,
         });
         return response;
       } catch (error) {
         recordNetwork({
-          captured_at: new Date().toISOString(),
           type: 'fetch',
           url,
           method,
-          request_headers: requestHeaders,
-          request_body: requestBody,
-          error: clip(error, 8000),
-          duration_ms: Date.now() - startedAt,
+          error,
+          durationMs: Date.now() - startedAt,
         });
         throw error;
       }
@@ -143,51 +155,24 @@
   const OriginalXHR = window.XMLHttpRequest;
   if (typeof OriginalXHR === 'function') {
     const originalOpen = OriginalXHR.prototype.open;
-    const originalSetRequestHeader = OriginalXHR.prototype.setRequestHeader;
     const originalSend = OriginalXHR.prototype.send;
     OriginalXHR.prototype.open = function a2gentXHROpen(method, url) {
       this.__a2gentRequest = {
         type: 'xhr',
         method: String(method || 'GET'),
         url: String(url || ''),
-        request_headers: {},
       };
       return originalOpen.apply(this, arguments);
     };
-    OriginalXHR.prototype.setRequestHeader = function a2gentXHRHeader(name, value) {
-      const lower = String(name || '').toLowerCase();
-      if (this.__a2gentRequest && lower !== 'cookie' && lower !== 'set-cookie') {
-        this.__a2gentRequest.request_headers[String(name)] = String(value);
-      }
-      return originalSetRequestHeader.apply(this, arguments);
-    };
-    OriginalXHR.prototype.send = function a2gentXHRSend(body) {
+    OriginalXHR.prototype.send = function a2gentXHRSend() {
       const startedAt = Date.now();
-      const req = this.__a2gentRequest || { type: 'xhr', method: 'GET', url: '', request_headers: {} };
-      req.request_body = typeof body === 'string' ? clip(body, 16000) : '';
+      const req = this.__a2gentRequest || { type: 'xhr', method: 'GET', url: '' };
       this.addEventListener('loadend', () => {
-        const responseHeaders = {};
-        try {
-          const raw = this.getAllResponseHeaders() || '';
-          for (const line of raw.trim().split(/\r?\n/)) {
-            const idx = line.indexOf(':');
-            if (idx <= 0) continue;
-            const key = line.slice(0, idx).trim();
-            const lower = key.toLowerCase();
-            if (lower === 'cookie' || lower === 'set-cookie') continue;
-            responseHeaders[key] = line.slice(idx + 1).trim();
-          }
-        } catch {
-          // Ignore header extraction failures.
-        }
         recordNetwork({
-          captured_at: new Date().toISOString(),
           ...req,
           status: this.status,
-          status_text: this.statusText,
-          response_headers: responseHeaders,
-          response_body: typeof this.responseText === 'string' ? clip(this.responseText, 32000) : '',
-          duration_ms: Date.now() - startedAt,
+          statusText: this.statusText,
+          durationMs: Date.now() - startedAt,
         });
       });
       return originalSend.apply(this, arguments);
@@ -204,7 +189,7 @@
       payload: {
         console_logs: logs.slice(),
         page_errors: errors.slice(),
-        network_activity: network.slice(),
+        network_activity: latestNetwork(),
       },
     }, '*');
   });

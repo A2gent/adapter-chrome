@@ -5,6 +5,7 @@
   window.__A2GENT_BROWSER_ADAPTER_CONTENT__ = true;
 
   const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
+  const DEFAULT_CAESAR_BASE_URL = 'http://localhost:5173';
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
@@ -12,10 +13,12 @@
   const MAX_SELECTED_TEXT_FULL = 12000;
   const MAX_DOM_HTML = 180000;
   const MAX_DOM_TEXT = 60000;
-  const MAX_PERF_ENTRIES = 300;
+  const MAX_PERF_ENTRIES = 20;
+  const MAX_NETWORK_ENTRIES = 20;
 
   let host = null;
   let shadow = null;
+  let shouldFocusPrimaryControl = false;
   let state = {
     open: false,
     baseUrl: DEFAULT_BRUTE_BASE_URL,
@@ -48,10 +51,73 @@
 
   const nowIso = () => new Date().toISOString();
 
+  // WHY: sessions are persisted in Brute, but users inspect them in Caesar's browser UI.
+  // WHAT: build the local Caesar chat/session-detail URL opened by the Open Session button.
+  const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
+
   const setState = (patch) => {
     state = { ...state, ...patch };
     render();
   };
+
+  const overlayEventPath = (event) => {
+    try {
+      return typeof event.composedPath === 'function' ? event.composedPath() : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const isOverlayEvent = (event) => {
+    if (!host || !state.open) return false;
+    const path = overlayEventPath(event);
+    if (path.includes(host) || (shadow && path.includes(shadow))) return true;
+    return event.target === host || (event.target instanceof Node && host.contains(event.target));
+  };
+
+  const roleFromOverlayEvent = (event) => {
+    for (const node of overlayEventPath(event)) {
+      if (node && typeof node.getAttribute === 'function') {
+        const role = node.getAttribute('data-role');
+        if (role) return role;
+      }
+    }
+    return '';
+  };
+
+  const focusPrimaryControl = () => {
+    if (!state.open || !shadow) return;
+    const role = state.sessionId ? 'followup' : 'prompt';
+    const target = shadow.querySelector(`[data-role="${role}"]`);
+    if (!target || typeof target.focus !== 'function') return;
+    target.focus({ preventScroll: true });
+    if (typeof target.setSelectionRange === 'function') {
+      const end = String(target.value || '').length;
+      target.setSelectionRange(end, end);
+    }
+  };
+
+  const handleOverlayKeyboardEvent = (event) => {
+    if (!isOverlayEvent(event)) return;
+
+    const role = roleFromOverlayEvent(event);
+    if (event.type === 'keydown' && role === 'followup' && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void sendFollowup();
+      return;
+    }
+
+    // WHY: pages such as YouTube install global keyboard shortcuts on window/document.
+    // WHAT: stop overlay-originated key events before page listeners see them, while leaving
+    // browser default text editing intact by not calling preventDefault for normal typing.
+    event.stopImmediatePropagation();
+  };
+
+  for (const eventType of ['keydown', 'keypress', 'keyup']) {
+    window.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
+    document.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
+  }
 
   const appendMessage = (role, content) => {
     state = {
@@ -241,6 +307,55 @@
     window.postMessage({ type: 'A2GENT_GET_PAGE_DIAGNOSTICS', requestId }, '*');
   });
 
+  const endpointFromUrl = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw, location.href);
+      // WHY: diagnostic network payloads were overwhelming model context.
+      // WHAT: keep endpoint identity while dropping query/fragment/body/header data.
+      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') {
+        return `${parsed.protocol}[omitted]`;
+      }
+      if (parsed.origin && parsed.origin !== 'null') {
+        return `${parsed.origin}${parsed.pathname || '/'}`;
+      }
+      return `${parsed.protocol}${parsed.pathname || ''}`;
+    } catch {
+      return raw.replace(/[?#].*$/, '');
+    }
+  };
+
+  const latestByCapturedAt = (entries, limit) => (Array.isArray(entries) ? entries : [])
+    .slice()
+    .sort((a, b) => (Date.parse(a?.captured_at || '') || 0) - (Date.parse(b?.captured_at || '') || 0))
+    .slice(-limit);
+
+  const compactNetworkActivity = (entries) => latestByCapturedAt(entries, MAX_NETWORK_ENTRIES)
+    .map((entry) => {
+      const out = {
+        captured_at: entry.captured_at || nowIso(),
+        type: entry.type || 'network',
+        method: String(entry.method || 'GET').toUpperCase(),
+        url: endpointFromUrl(entry.url),
+      };
+      const status = Number(entry.status);
+      if (Number.isFinite(status)) {
+        out.status = status;
+      }
+      if (entry.status_text) {
+        out.status_text = clip(entry.status_text, 160);
+      }
+      const durationMs = Number(entry.duration_ms);
+      if (Number.isFinite(durationMs)) {
+        out.duration_ms = Math.round(durationMs);
+      }
+      if (entry.error_message || entry.error) {
+        out.error_message = clip(entry.error_message || entry.error, 500);
+      }
+      return out;
+    });
+
   const captureScreenshot = async () => {
     const response = await chrome.runtime.sendMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' });
     if (!response || !response.ok || !response.dataUrl) {
@@ -248,22 +363,31 @@
     }
     return response.dataUrl;
   };
+  const performanceEntryName = (entry) => {
+    if (entry.entryType === 'resource' || entry.entryType === 'navigation') {
+      return endpointFromUrl(entry.name);
+    }
+    return String(entry.name || '');
+  };
 
   const collectPerformanceEntries = () => {
     try {
       return performance.getEntries()
         .filter((entry) => entry.entryType === 'navigation' || entry.entryType === 'resource' || entry.entryType === 'paint')
+        .sort((a, b) => a.startTime - b.startTime)
         .slice(-MAX_PERF_ENTRIES)
-        .map((entry) => ({
-          name: entry.name,
-          entry_type: entry.entryType,
-          initiator_type: entry.initiatorType || undefined,
-          start_time: Math.round(entry.startTime),
-          duration: Math.round(entry.duration),
-          transfer_size: entry.transferSize || undefined,
-          encoded_body_size: entry.encodedBodySize || undefined,
-          decoded_body_size: entry.decodedBodySize || undefined,
-        }));
+        .map((entry) => {
+          const out = {
+            name: performanceEntryName(entry),
+            entry_type: entry.entryType,
+            start_time: Math.round(entry.startTime),
+            duration: Math.round(entry.duration),
+          };
+          if (entry.initiatorType) {
+            out.initiator_type = entry.initiatorType;
+          }
+          return out;
+        });
     } catch {
       return [];
     }
@@ -323,10 +447,11 @@
         },
         console_logs: pageDiagnostics.console_logs || [],
         page_errors: pageDiagnostics.page_errors || [],
-        network_activity: pageDiagnostics.network_activity || [],
+        network_activity: compactNetworkActivity(pageDiagnostics.network_activity),
         exclusions: {
           cookies: 'excluded by specification; extension does not read document.cookie or Cookie/Set-Cookie headers',
           browser_storage: 'excluded by specification; extension does not read localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted storage',
+          network_details: 'network diagnostics are limited to latest 20 endpoint-level records and compact timing entries; request/response headers, bodies, URL query strings, and URL fragments are omitted',
         },
       },
     };
@@ -515,6 +640,23 @@
     }
   };
 
+  const openSessionDetail = () => {
+    const sessionId = String(state.sessionId || '').trim();
+    if (!sessionId) return;
+
+    // WHY: opening a browser tab is more reliable from the extension service worker than from an injected content script.
+    // WHAT: ask the background script to open Caesar, falling back to window.open if the extension context was reloaded.
+    try {
+      chrome.runtime.sendMessage({ type: 'A2GENT_OPEN_SESSION_DETAIL', sessionId }, (response) => {
+        if (chrome.runtime.lastError || !response?.ok) {
+          window.open(buildSessionDetailUrl(sessionId), '_blank', 'noopener');
+        }
+      });
+    } catch {
+      window.open(buildSessionDetailUrl(sessionId), '_blank', 'noopener');
+    }
+  };
+
   const sendFullRecapture = async () => {
     if (!state.sessionId || state.busy || state.recapturing) return;
     setState({ recapturing: true, busy: true, status: 'Capturing full diagnostics...', error: '' });
@@ -553,6 +695,7 @@
     shadow.querySelector('[data-role="create"]')?.addEventListener('click', () => void startSession());
     shadow.querySelector('[data-role="send"]')?.addEventListener('click', () => void sendFollowup());
     shadow.querySelector('[data-role="recapture"]')?.addEventListener('click', () => void sendFullRecapture());
+    shadow.querySelector('[data-role="open-session"]')?.addEventListener('click', () => openSessionDetail());
     shadow.querySelector('[data-role="followup"]')?.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault();
@@ -601,6 +744,9 @@
     // Keep connection and project setup out of the primary diagnosis flow; users must explicitly open settings to change them.
     const settingsPanel = state.settingsOpen ? `
       <section class="settings-panel" aria-label="Adapter settings">
+        <section class="warning">
+          Diagnosis sends a broad page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, DOM/text snapshot, console/errors and the latest 20 endpoint-level network records. Cookies, browser storage, network headers and request/response bodies are excluded.
+        </section>
         <div class="settings-row">
           <label>
             <span>Local Brute URL</span>
@@ -642,13 +788,14 @@
           </div>
         </header>
         ${settingsPanel}
-        <section class="warning">
-          Diagnosis sends a broad page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, DOM/text snapshot, console/errors and browser-observed network context. Cookies and browser storage are excluded.
-        </section>
         ${state.sessionId ? renderContinuation(messages) : renderCreation()}
       </div>
     `;
     attachEvents();
+    if (shouldFocusPrimaryControl) {
+      shouldFocusPrimaryControl = false;
+      window.requestAnimationFrame(focusPrimaryControl);
+    }
   };
 
   const renderCreation = () => `
@@ -666,16 +813,16 @@
   `;
 
   const renderContinuation = (messages) => `
-    <section class="session-bar">
-      <span>Session: <code>${escapeHtml(state.sessionId)}</code></span>
-      <button type="button" data-role="recapture" class="secondary" ${state.busy ? 'disabled' : ''}>
-        ${state.recapturing ? 'Recapturing...' : 'Full recapture & send'}
-      </button>
-    </section>
     <section class="messages">${messages}</section>
     <section class="followup-row">
       <textarea data-role="followup" placeholder="Follow up. Cmd/Ctrl+Enter to send with lightweight refreshed page context.">${escapeHtml(state.followup)}</textarea>
-      <button type="button" data-role="send" class="primary" ${state.busy ? 'disabled' : ''}>Send</button>
+      <div class="actions continuation-actions">
+        <button type="button" data-role="open-session" class="secondary">Open Session</button>
+        <button type="button" data-role="recapture" class="secondary" ${state.busy ? 'disabled' : ''}>
+          ${state.recapturing ? 'Recapturing...' : 'Full recapture & send'}
+        </button>
+        <button type="button" data-role="send" class="primary" ${state.busy ? 'disabled' : ''}>Send</button>
+      </div>
     </section>
   `;
 
@@ -757,6 +904,7 @@
     .detection { flex: 1; display: grid; gap: 2px; min-width: 200px; color: #9fb1c7; }
     .detection strong { color: #e9f0fb; font-size: 12px; }
     .detection.auto strong { color: #9ff0c1; }
+    .detection.default strong { color: #f7dfaa; }
     .create-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; min-height: 0; }
     .messages {
       flex: 1 1 auto;
@@ -775,7 +923,9 @@
     .message-role { font-size: 11px; color: #9fb1c7; margin-bottom: 3px; text-transform: uppercase; }
     .message pre { margin: 0; white-space: pre-wrap; color: #eef5ff; font: inherit; }
     .empty { color: #8fa1b9; }
+    .followup-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
     .followup-row textarea { min-height: 54px; }
+    .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
       .panel { height: min(var(--a2gent-overlay-height), 60vh); }
       .settings-row, .project-row, .create-grid, .followup-row { display: grid; grid-template-columns: 1fr; }
@@ -796,9 +946,15 @@
   const toggleOverlay = async () => {
     ensureOverlay();
     const nextOpen = !state.open;
+    if (nextOpen) {
+      shouldFocusPrimaryControl = true;
+    }
     setState({ open: nextOpen, settingsOpen: false });
     if (nextOpen && state.projects.length === 0 && !state.busy) {
       await loadSettingsAndProjects();
+    }
+    if (nextOpen) {
+      window.requestAnimationFrame(focusPrimaryControl);
     }
   };
 
