@@ -93,7 +93,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-NF-UX-003 The overlay must clearly communicate that the diagnosis flow can send a broad diagnostic bundle from the active page to Brute.
 - [ ] REQ-NF-UX-004 The MVP primary UI surface shall be an in-page bottom overlay injected by the extension, not a browser-managed side panel.
 - [ ] REQ-NF-UX-005 Clicking the extension icon should toggle the bottom overlay open and closed on the active page.
-- [ ] REQ-NF-UX-006 On desktop, the overlay shall open full-width at the bottom with a default height of 320 px and be resizable between 240 px and 640 px.
+- [ ] REQ-NF-UX-006 On desktop, the unopened-session overlay shall open full-width at the bottom with a compact Caesar-like composer, default height of 148 px, and resizable range of 116 px to 640 px; settings and inline-continuation views keep an expanded minimum height of 240 px.
 - [ ] REQ-NF-UX-007 On narrower viewports, the overlay shall stay bottom-anchored and may grow up to 60% of viewport height.
 - [ ] REQ-NF-UX-008 Inline continuation shall automatically send a lightweight refreshed page-context package on every follow-up message and expose an explicit control for full diagnostic recapture.
 - [ ] REQ-NF-UX-009 Saved local Brute/agent URL and project-context settings shall be hidden by default in the overlay and only shown after the user explicitly opens Settings.
@@ -118,6 +118,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-016 Saved local Brute/agent URL and project-context settings are not part of the default overlay view; the user must explicitly open Settings to view or change them.
 - [x] DEC-017 Network diagnostics are context-size bounded: send only the latest 20 endpoint-level fetch/XHR records and compact timing entries, ordered by time, without request/response headers, request/response bodies, URL query strings, or URL fragments.
 - [x] DEC-018 The extension uses Brute's built-in `Knowledge Base` project (`system-kb`) as the default project when URL-pattern auto-detection has no unique project match.
+- [x] DEC-019 The default unopened-session overlay follows Caesar's compact composer style: a single prompt textarea with a circular send-icon button, no visible long diagnostics button text, no drag-and-drop image affordance, and no workflow selector in the Chrome extension MVP.
 
 ## Implementation boundaries
 - [ ] BOUND-001 `adapter-chrome`: extension manifest, content-script overlay injection, overlay UI, project selection UI, local Brute URL setting, automatic URL matching, initial full capture, lightweight refresh, manual full recapture, and Brute chat/session integration.
@@ -166,6 +167,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - Implemented MVP across `adapter-chrome`, `caesar`, and `brute` in the current implementation session.
 - Extension overlay now keeps the saved local Brute/agent URL and project-context controls hidden by default; **Settings** must be opened explicitly to view/change them, refresh projects, or save a new URL, and successful URL saves close the settings panel again.
 - The extension now defaults new sessions to Brute's seeded `Knowledge Base` system project (`system-kb`) whenever URL-pattern auto-detection does not produce a unique project; URL auto-detected projects still take precedence and users can override from Settings.
+- The default unopened-session overlay now uses a compact Caesar-like composer: one prompt textarea with a circular send-icon button, no visible long diagnostics button text, no drag-and-drop image affordance, and no workflow selector.
 - The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
 - Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.

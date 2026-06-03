@@ -16,6 +16,12 @@
   const MAX_DOM_TEXT = 60000;
   const MAX_PERF_ENTRIES = 20;
   const MAX_NETWORK_ENTRIES = 20;
+  // WHY: the unopened-session overlay should behave like Caesar's compact composer
+  // instead of covering a large part of the current browser page.
+  // WHAT: use a short default/minimum height and expand only for settings/history views.
+  const COMPACT_OVERLAY_HEIGHT = 148;
+  const COMPACT_OVERLAY_MIN_HEIGHT = 116;
+  const EXPANDED_OVERLAY_MIN_HEIGHT = 240;
 
   let host = null;
   let shadow = null;
@@ -34,7 +40,7 @@
     recapturing: false,
     sessionId: '',
     messages: [],
-    overlayHeight: 320,
+    overlayHeight: COMPACT_OVERLAY_HEIGHT,
     settingsOpen: false,
   };
 
@@ -756,10 +762,11 @@
     resize?.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       const startY = event.clientY;
-      const startHeight = state.overlayHeight;
+      const minHeight = state.sessionId || state.settingsOpen ? EXPANDED_OVERLAY_MIN_HEIGHT : COMPACT_OVERLAY_MIN_HEIGHT;
+      const startHeight = Math.max(state.overlayHeight, minHeight);
       const onMove = (moveEvent) => {
         const maxHeight = Math.min(640, Math.floor(window.innerHeight * (window.innerWidth < 720 ? 0.6 : 0.9)));
-        const nextHeight = Math.min(maxHeight, Math.max(240, startHeight + (startY - moveEvent.clientY)));
+        const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + (startY - moveEvent.clientY)));
         state.overlayHeight = nextHeight;
         host.style.setProperty('--a2gent-overlay-height', `${nextHeight}px`);
       };
@@ -825,7 +832,7 @@
     const focusSnapshot = readOverlayFocusSnapshot();
     shadow.innerHTML = `
       <style>${styles()}</style>
-      <div class="panel" role="dialog" aria-label="A2gent browser diagnostics">
+      <div class="panel ${state.sessionId ? 'has-session' : 'is-new-session'} ${state.settingsOpen ? 'settings-open' : ''}" role="dialog" aria-label="A2gent browser diagnostics">
         <div class="resize" data-role="resize" title="Drag to resize"></div>
         <header>
           <div>
@@ -850,18 +857,22 @@
       window.requestAnimationFrame(focusPrimaryControl);
     }
   };
-
   const renderCreation = () => `
-    <section class="create-grid">
-      <label>
-        <span>What should the agent investigate?</span>
-        <textarea data-role="prompt" placeholder="Describe the UI issue, selected text question, or debugging task...">${escapeHtml(state.prompt)}</textarea>
-      </label>
-      <div class="actions">
-        <button type="button" data-role="create" class="primary" ${state.busy ? 'disabled' : ''}>
-          ${state.busy ? 'Working...' : 'Create session & send diagnostics'}
-        </button>
-      </div>
+    <section class="create-composer" aria-label="Create a new A2gent session">
+      <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat...">${escapeHtml(state.prompt)}</textarea>
+      <button
+        type="button"
+        data-role="create"
+        class="primary send-button ${state.busy ? 'is-busy' : ''}"
+        aria-label="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
+        title="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
+        ${state.busy ? 'disabled' : ''}
+      >
+        <span class="visually-hidden">${state.busy ? 'Working...' : 'Create session and send diagnostics'}</span>
+        <svg class="send-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+          <path d="M3.7 20.3 21 12 3.7 3.7l1.4 6.1L14 12l-8.9 2.2-1.4 6.1Z" fill="currentColor"></path>
+        </svg>
+      </button>
     </section>
   `;
 
@@ -880,7 +891,7 @@
   `;
 
   const styles = () => `
-    :host { all: initial; --a2gent-overlay-height: 320px; }
+    :host { all: initial; --a2gent-overlay-height: ${COMPACT_OVERLAY_HEIGHT}px; }
     * { box-sizing: border-box; }
     .panel {
       position: fixed;
@@ -888,22 +899,26 @@
       right: 0;
       bottom: 0;
       height: min(var(--a2gent-overlay-height), 60vh);
-      min-height: 240px;
+      min-height: ${COMPACT_OVERLAY_MIN_HEIGHT}px;
       max-height: 640px;
       z-index: 2147483647;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 10px 12px 12px;
+      gap: 10px;
+      padding: 10px 14px 14px;
       color: #e9f0fb;
-      background: linear-gradient(180deg, #121821 0%, #0e1218 100%);
-      border-top: 1px solid rgba(145, 181, 255, 0.35);
+      background: linear-gradient(180deg, #14181f 0%, #0d1117 100%);
+      border-top: 1px solid rgba(145, 181, 255, 0.28);
       box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.45);
       font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    .panel.has-session,
+    .panel.settings-open { min-height: ${EXPANDED_OVERLAY_MIN_HEIGHT}px; }
+    .panel.is-new-session:not(.settings-open) { justify-content: flex-start; }
     .resize { position: absolute; top: 0; left: 0; right: 0; height: 7px; cursor: ns-resize; }
     header, .settings-row, .project-row, .session-bar, .followup-row, .actions, .header-actions { display: flex; align-items: center; gap: 8px; }
-    header { justify-content: space-between; flex: 0 0 auto; }
+    header { justify-content: space-between; flex: 0 0 auto; min-height: 32px; }
+    header > div:first-child { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
     .header-actions { flex: 0 0 auto; }
     strong { font-weight: 700; }
     code { color: #b9d8ff; }
@@ -919,7 +934,12 @@
       font: inherit;
       outline: none;
     }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(102, 95, 255, 0.95);
+      box-shadow: 0 0 0 1px rgba(102, 95, 255, 0.36);
+    }
     textarea { min-height: 80px; resize: vertical; }
+    textarea::placeholder { color: rgba(243, 247, 255, 0.58); }
     .settings-panel {
       display: grid;
       gap: 8px;
@@ -944,7 +964,8 @@
     button.primary { background: #3978d6; font-weight: 700; }
     button.secondary { background: rgba(84, 119, 166, 0.42); }
     button.ghost { background: transparent; border: 1px solid rgba(255,255,255,.16); }
-    .status { margin-left: 10px; color: #9fc0f0; font-size: 12px; }
+    button.ghost:hover, button.secondary:hover { background: rgba(255,255,255,.16); }
+    .status { margin-left: 0; color: #9fc0f0; font-size: 12px; }
     .status.error { color: #ffb4b4; }
     .warning {
       border: 1px solid rgba(255, 202, 96, .3);
@@ -958,7 +979,56 @@
     .detection strong { color: #e9f0fb; font-size: 12px; }
     .detection.auto strong { color: #9ff0c1; }
     .detection.default strong { color: #f7dfaa; }
-    .create-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; min-height: 0; }
+    .create-composer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 48px;
+      gap: 12px;
+      align-items: center;
+      flex: 0 0 auto;
+      min-height: 56px;
+    }
+    .create-composer textarea {
+      height: 56px;
+      min-height: 56px;
+      max-height: 112px;
+      resize: none;
+      overflow: auto;
+      border-radius: 14px;
+      border-color: rgba(102, 95, 255, 0.95);
+      background: rgba(255, 255, 255, 0.10);
+      box-shadow: 0 0 0 1px rgba(102, 95, 255, 0.32);
+      padding: 15px 18px;
+      color: #f4f4f5;
+      font-size: 16px;
+      line-height: 24px;
+    }
+    button.send-button {
+      width: 48px;
+      min-width: 48px;
+      height: 48px;
+      padding: 0;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.14);
+      color: #f7fbff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+    }
+    .send-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.20); }
+    .send-button:focus-visible { box-shadow: 0 0 0 2px rgba(102, 95, 255, 0.72); }
+    .send-icon { width: 30px; height: 30px; transform: translateX(1px); }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .messages {
       flex: 1 1 auto;
       overflow: auto;
@@ -980,10 +1050,14 @@
     .followup-row textarea { min-height: 54px; }
     .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
-      .panel { height: min(var(--a2gent-overlay-height), 60vh); }
-      .settings-row, .project-row, .create-grid, .followup-row { display: grid; grid-template-columns: 1fr; }
+      .panel { height: min(var(--a2gent-overlay-height), 60vh); padding: 10px 10px 12px; }
+      .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
       .header-actions button { width: auto; }
+      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; }
+      .create-composer textarea { height: 52px; min-height: 52px; padding: 13px 15px; font-size: 15px; }
+      .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
+      .send-icon { width: 28px; height: 28px; }
     }
   `;
 
