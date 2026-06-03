@@ -54,7 +54,6 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-023 The extension shall let the user explicitly trigger a full recapture of the maximum diagnostic bundle during inline continuation.
 - [ ] REQ-F-024 The extension shall default the Brute base URL to `http://localhost:5445` and allow the user to override it to another loopback URL.
 - [ ] REQ-F-025 The MVP shall encode diagnostic context as a machine-readable JSON block embedded in the message text sent to Brute, with screenshots attached as images and extension/session source labels stored in session metadata.
-- [ ] REQ-F-026 When URL-pattern detection does not produce a unique selected project, the extension shall default new sessions to Brute's built-in `Knowledge Base` project (`system-kb`) when that project is available.
 
 ### Non-functional
 #### Performance
@@ -118,6 +117,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-015 Diagnostic context is represented as machine-readable JSON embedded in message text, plus image attachments and session metadata labels.
 - [x] DEC-016 Saved local Brute/agent URL and project-context settings are not part of the default overlay view; the user must explicitly open Settings to view or change them.
 - [x] DEC-017 Network diagnostics are context-size bounded: send only the latest 20 endpoint-level fetch/XHR records and compact timing entries, ordered by time, without request/response headers, request/response bodies, URL query strings, or URL fragments.
+- [x] DEC-018 The extension uses Brute's built-in `Knowledge Base` project (`system-kb`) as the default project when URL-pattern auto-detection has no unique project match.
 
 ## Implementation boundaries
 - [ ] BOUND-001 `adapter-chrome`: extension manifest, content-script overlay injection, overlay UI, project selection UI, local Brute URL setting, automatic URL matching, initial full capture, lightweight refresh, manual full recapture, and Brute chat/session integration.
@@ -152,7 +152,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 ## Acceptance criteria
 - [ ] AC-001 The specification explicitly defines the direct-to-local-Brute no-auth connection model, including the loopback-only URL constraint and default base URL behavior.
 - [ ] AC-002 The specification explicitly defines the MVP user flows and bottom-overlay UX, including overlay sizing and toggle behavior.
-- [ ] AC-003 The specification explicitly defines the URL-pattern syntax, validation, specificity scoring, tie fallback, and manual-selection behavior.
+- [ ] AC-003 The specification explicitly defines the URL-pattern syntax, validation, specificity scoring, Knowledge Base default fallback, and manual-selection behavior.
 - [ ] AC-004 The specification explicitly defines the exact initial full diagnostic bundle, the approved maximum-capture behavior, the explicit cookies/storage exclusions, and the representation of that bundle in Brute session creation flows.
 - [ ] AC-005 The specification explicitly defines the exact lightweight automatic refresh payload, the manual full-recapture behavior, and the representation of both in Brute continuation flows.
 - [ ] AC-006 The specification explicitly lists required changes by repository (`adapter-chrome`, `caesar`, `brute`).
@@ -165,6 +165,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 ## Implementation notes
 - Implemented MVP across `adapter-chrome`, `caesar`, and `brute` in the current implementation session.
 - Extension overlay now keeps the saved local Brute/agent URL and project-context controls hidden by default; **Settings** must be opened explicitly to view/change them, refresh projects, or save a new URL, and successful URL saves close the settings panel again.
+- The extension now defaults new sessions to Brute's seeded `Knowledge Base` system project (`system-kb`) whenever URL-pattern auto-detection does not produce a unique project; URL auto-detected projects still take precedence and users can override from Settings.
 - The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
 - Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.

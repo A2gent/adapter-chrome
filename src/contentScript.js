@@ -6,8 +6,6 @@
 
   const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
   const DEFAULT_CAESAR_BASE_URL = 'http://localhost:5173';
-  const DEFAULT_PROJECT_ID = 'system-kb';
-  const DEFAULT_PROJECT_NAME = 'Knowledge Base';
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
@@ -550,30 +548,6 @@
     };
   };
 
-  const findDefaultProject = (projects) => {
-    const items = Array.isArray(projects) ? projects : [];
-    return items.find((project) => project.id === DEFAULT_PROJECT_ID)
-      || items.find((project) => String(project.name || '').trim().toLowerCase() === DEFAULT_PROJECT_NAME.toLowerCase())
-      || null;
-  };
-
-  const withDefaultProjectFallback = (projects, detection) => {
-    if (detection.projectId) return detection;
-    const project = findDefaultProject(projects);
-    if (!project) return detection;
-    // WHY: new browser-diagnosis sessions should be usable immediately even when
-    // URL auto-detection has no project match. Brute seeds this system project.
-    // WHAT: fall back to Knowledge Base while preserving URL auto-detection wins.
-    return {
-      projectId: project.id,
-      mode: 'default',
-      label: `Default project: ${project.name}`,
-      detail: detection.detail
-        ? `${detection.detail} Using Brute built-in Knowledge Base as the default project.`
-        : 'Using Brute built-in Knowledge Base as the default project.',
-    };
-  };
-
   const loadSettingsAndProjects = async () => {
     const storedBaseUrl = await storageGet(STORAGE_BASE_URL_KEY);
     const baseUrl = storedBaseUrl || DEFAULT_BRUTE_BASE_URL;
@@ -582,7 +556,7 @@
     try {
       setState({ status: 'Loading projects...', error: '' });
       const projects = await listProjects();
-      const detection = withDefaultProjectFallback(projects || [], detectProject(projects || [], location.href));
+      const detection = detectProject(projects || [], location.href);
       setState({
         projects: projects || [],
         selectedProjectId: detection.projectId,
@@ -819,6 +793,7 @@
     `;
     attachEvents();
     if (shouldFocusPrimaryControl) {
+      shouldFocusPrimaryControl = false;
       window.requestAnimationFrame(focusPrimaryControl);
     }
   };
