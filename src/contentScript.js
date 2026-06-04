@@ -10,6 +10,8 @@
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
   const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
+  const DRAWING_CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
+  const DRAWING_ROOT_ID = 'a2gent-browser-adapter-drawing-root';
   const MAX_SELECTED_TEXT_LIGHT = 4000;
   const MAX_SELECTED_TEXT_FULL = 12000;
   const MAX_DOM_HTML = 180000;
@@ -38,6 +40,9 @@
     error: '',
     busy: false,
     recapturing: false,
+    drawingEnabled: false,
+    hasDrawing: false,
+    drawingStrokeCount: 0,
     sessionId: '',
     messages: [],
     overlayHeight: COMPACT_OVERLAY_HEIGHT,
@@ -406,12 +411,66 @@
     });
 
   const captureScreenshot = async () => {
-    const response = await chrome.runtime.sendMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' });
-    if (!response || !response.ok || !response.dataUrl) {
-      throw new Error(response?.error || 'Failed to capture visible tab.');
+    const previousVisibility = host?.style.visibility || '';
+    const shouldHideAdapterPanel = Boolean(host && state.open);
+    if (shouldHideAdapterPanel) {
+      // WHY: screenshots should emphasize the user's page and freeform focus mark, not the adapter controls.
+      // WHAT: temporarily hide only the A2gent panel while leaving the drawing canvas visible for captureVisibleTab.
+      host.style.visibility = 'hidden';
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
     }
-    return response.dataUrl;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' });
+      if (!response || !response.ok || !response.dataUrl) {
+        throw new Error(response?.error || 'Failed to capture visible tab.');
+      }
+      return response.dataUrl;
+    } finally {
+      if (shouldHideAdapterPanel && host) {
+        host.style.visibility = previousVisibility;
+      }
+    }
   };
+
+  const getDrawingOverlay = () => window.__A2GENT_DRAWING_OVERLAY__ || null;
+
+  const syncDrawingState = () => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay) return;
+    state = {
+      ...state,
+      drawingEnabled: Boolean(drawingOverlay.isEnabled?.()),
+      hasDrawing: Boolean(drawingOverlay.hasStrokes?.()),
+      drawingStrokeCount: drawingOverlay.getSummary?.()?.stroke_count || 0,
+    };
+    render();
+  };
+
+  const toggleDrawing = () => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay) {
+      setState({ error: 'Drawing overlay is unavailable. Reload the page or extension.' });
+      return;
+    }
+    drawingOverlay.toggle();
+    syncDrawingState();
+  };
+
+  const cancelDrawing = () => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay) return;
+    drawingOverlay.clear({ exit: true });
+    syncDrawingState();
+  };
+
+  const disableDrawingInput = () => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay?.isEnabled?.()) return;
+    drawingOverlay.setEnabled(false);
+    syncDrawingState();
+  };
+
+  const getDrawingSummary = () => getDrawingOverlay()?.getSummary?.() || null;
   const performanceEntryName = (entry) => {
     if (entry.entryType === 'resource' || entry.entryType === 'navigation') {
       return endpointFromUrl(entry.name);
@@ -446,6 +505,7 @@
     const clone = document.documentElement.cloneNode(true);
     try {
       clone.querySelector('#a2gent-browser-adapter-root')?.remove();
+      clone.querySelector(`#${DRAWING_ROOT_ID}`)?.remove();
     } catch {
       // Ignore DOM clone cleanup failures.
     }
@@ -462,6 +522,8 @@
   };
 
   const collectFullDiagnostics = async (userPrompt, reason) => {
+    disableDrawingInput();
+    const focusAnnotation = getDrawingSummary();
     const [pageDiagnostics, screenshotDataUrl] = await Promise.all([
       getPageDiagnosticsFromMainWorld(),
       captureScreenshot(),
@@ -489,6 +551,7 @@
           user_agent: navigator.userAgent,
         },
         user_prompt: userPrompt,
+        focus_annotation: focusAnnotation || undefined,
         selected_text: getSelectionText(MAX_SELECTED_TEXT_FULL),
         dom_snapshot: collectDomSnapshot(),
         browser_observed_state: {
@@ -659,6 +722,8 @@
         page_title: document.title,
         project_detection: state.projectDetection,
         project_name: selectedProject?.name || '',
+        has_focus_annotation: Boolean(diagnostics.payload.focus_annotation),
+        focus_annotation_stroke_count: diagnostics.payload.focus_annotation?.stroke_count || 0,
       };
       setState({ status: 'Creating Brute session...' });
       const created = await createSession(state.selectedProjectId, metadata);
@@ -694,6 +759,14 @@
   };
 
   window.addEventListener(OVERLAY_SEND_FOLLOWUP_EVENT, () => void sendFollowup());
+  window.addEventListener(DRAWING_CHANGE_EVENT, (event) => {
+    const detail = event.detail || {};
+    setState({
+      drawingEnabled: Boolean(detail.enabled),
+      hasDrawing: Boolean(detail.hasStrokes),
+      drawingStrokeCount: Number(detail.strokeCount) || 0,
+    });
+  });
 
   const openSessionDetail = () => {
     const sessionId = String(state.sessionId || '').trim();
@@ -731,7 +804,10 @@
   };
 
   const attachEvents = () => {
-    shadow.querySelector('[data-role="close"]')?.addEventListener('click', () => setState({ open: false, settingsOpen: false }));
+    shadow.querySelector('[data-role="close"]')?.addEventListener('click', () => {
+      disableDrawingInput();
+      setState({ open: false, settingsOpen: false });
+    });
     shadow.querySelector('[data-role="settings-toggle"]')?.addEventListener('click', () => setState({ settingsOpen: !state.settingsOpen }));
     shadow.querySelector('[data-role="refresh-projects"]')?.addEventListener('click', () => void loadSettingsAndProjects());
     shadow.querySelector('[data-role="save-base-url"]')?.addEventListener('click', () => void saveBaseUrl());
@@ -748,6 +824,8 @@
       state.followup = event.target.value;
     });
     shadow.querySelector('[data-role="create"]')?.addEventListener('click', () => void startSession());
+    shadow.querySelectorAll('[data-role="drawing-toggle"]').forEach((button) => button.addEventListener('click', () => toggleDrawing()));
+    shadow.querySelectorAll('[data-role="drawing-cancel"]').forEach((button) => button.addEventListener('click', () => cancelDrawing()));
     shadow.querySelector('[data-role="send"]')?.addEventListener('click', () => void sendFollowup());
     shadow.querySelector('[data-role="recapture"]')?.addEventListener('click', () => void sendFullRecapture());
     shadow.querySelector('[data-role="open-session"]')?.addEventListener('click', () => openSessionDetail());
@@ -777,6 +855,20 @@
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     });
+  };
+
+  const renderDrawingHeaderActions = () => {
+    if (!state.drawingEnabled && !state.hasDrawing) return '';
+    return `
+      <button
+        type="button"
+        data-role="drawing-toggle"
+        class="ghost ${state.drawingEnabled ? 'active-drawing' : ''}"
+        aria-pressed="${state.drawingEnabled ? 'true' : 'false'}"
+        ${state.busy ? 'disabled' : ''}
+      >${state.drawingEnabled ? 'Done drawing' : 'Add focus'}</button>
+      <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
+    `;
   };
 
   const render = () => {
@@ -840,6 +932,7 @@
             <span class="status ${state.error ? 'error' : ''}">${escapeHtml(state.error || state.status)}</span>
           </div>
           <div class="header-actions">
+            ${renderDrawingHeaderActions()}
             <button type="button" data-role="settings-toggle" class="ghost" aria-expanded="${state.settingsOpen ? 'true' : 'false'}">
               ${state.settingsOpen ? 'Hide settings' : 'Settings'}
             </button>
@@ -857,6 +950,28 @@
       window.requestAnimationFrame(focusPrimaryControl);
     }
   };
+  const renderDrawingControls = () => {
+    const drawLabel = state.drawingEnabled ? 'Done drawing' : (state.hasDrawing ? 'Add more focus' : 'Draw focus');
+    const hint = state.drawingEnabled
+      ? 'Drag on the page area above this panel. The red curve will be included in the next screenshot.'
+      : (state.hasDrawing ? `${state.drawingStrokeCount || 1} focus stroke${state.drawingStrokeCount === 1 ? '' : 's'} ready for the next screenshot.` : 'Optional: mark the important page area before creating or recapturing.');
+    return `
+      <section class="drawing-tools" aria-label="Screenshot focus drawing tools">
+        <button
+          type="button"
+          data-role="drawing-toggle"
+          class="secondary ${state.drawingEnabled ? 'active' : ''}"
+          aria-pressed="${state.drawingEnabled ? 'true' : 'false'}"
+          ${state.busy ? 'disabled' : ''}
+        >${drawLabel}</button>
+        ${(state.drawingEnabled || state.hasDrawing) ? `
+          <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
+        ` : ''}
+        <span>${escapeHtml(hint)}</span>
+      </section>
+    `;
+  };
+
   const renderCreation = () => `
     <section class="create-composer" aria-label="Create a new A2gent session">
       <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat...">${escapeHtml(state.prompt)}</textarea>
@@ -874,10 +989,12 @@
         </svg>
       </button>
     </section>
+    ${renderDrawingControls()}
   `;
 
   const renderContinuation = (messages) => `
     <section class="messages">${messages}</section>
+    ${renderDrawingControls()}
     <section class="followup-row">
       <textarea data-role="followup" placeholder="Follow up. Cmd/Ctrl+Enter to send with lightweight refreshed page context.">${escapeHtml(state.followup)}</textarea>
       <div class="actions continuation-actions">
@@ -963,7 +1080,10 @@
     button:disabled { opacity: .55; cursor: not-allowed; }
     button.primary { background: #3978d6; font-weight: 700; }
     button.secondary { background: rgba(84, 119, 166, 0.42); }
+    button.secondary.active { background: #ffd166; color: #111827; font-weight: 700; }
     button.ghost { background: transparent; border: 1px solid rgba(255,255,255,.16); }
+    button.ghost.active-drawing { border-color: rgba(255, 209, 102, .86); color: #ffe7a6; }
+    button.ghost.danger { border-color: rgba(255, 95, 86, .52); color: #ffb4b4; }
     button.ghost:hover, button.secondary:hover { background: rgba(255,255,255,.16); }
     .status { margin-left: 0; color: #9fc0f0; font-size: 12px; }
     .status.error { color: #ffb4b4; }
@@ -1018,6 +1138,15 @@
     .send-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.20); }
     .send-button:focus-visible { box-shadow: 0 0 0 2px rgba(102, 95, 255, 0.72); }
     .send-icon { width: 30px; height: 30px; transform: translateX(1px); }
+    .drawing-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: #9fb1c7;
+      font-size: 12px;
+    }
+    .drawing-tools span { min-width: 180px; }
     .visually-hidden {
       position: absolute;
       width: 1px;

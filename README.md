@@ -50,7 +50,7 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Current page URL and title.
 - User prompt text.
 - Current selected text when present.
-- Visible-page screenshot as an image attachment.
+- Visible-page screenshot as an image attachment. If the user uses **Draw focus** first, the screenshot includes the freeform red focus curve and the JSON bundle includes compact `focus_annotation` stroke metadata.
 - DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
 - Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
@@ -72,3 +72,4 @@ After the initial session is created, the overlay stays in an inline continuatio
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
 - The **Open Session** button opens the created session in Caesar's browser session detail view.
 - The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot from the continuation buttons row.
+- The **Draw focus** button is available before initial creation and before full recapture. It lets the user drag freeform curves over the page area, keeps those curves visible for the next screenshot, and **Cancel drawing** clears all drawn focus marks.
