@@ -4,7 +4,19 @@
   "version": "0.1.0",
   "description": "Create and continue local Brute sessions from the current browser page with diagnostic context.",
   "action": {
-    "default_title": "Toggle A2gent diagnostics overlay"
+    "default_title": "Toggle A2gent diagnostics overlay",
+    "default_icon": {
+      "16": "icons/a2gent-16.png",
+      "32": "icons/a2gent-32.png",
+      "48": "icons/a2gent-48.png",
+      "128": "icons/a2gent-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/a2gent-16.png",
+    "32": "icons/a2gent-32.png",
+    "48": "icons/a2gent-48.png",
+    "128": "icons/a2gent-128.png"
   },
   "permissions": [
     "activeTab",

@@ -119,6 +119,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-017 Network diagnostics are context-size bounded: send only the latest 20 endpoint-level fetch/XHR records and compact timing entries, ordered by time, without request/response headers, request/response bodies, URL query strings, or URL fragments.
 - [x] DEC-018 The extension uses Brute's built-in `Knowledge Base` project (`system-kb`) as the default project when URL-pattern auto-detection has no unique project match.
 - [x] DEC-019 The default unopened-session overlay follows Caesar's compact composer style: a single prompt textarea with a circular send-icon button, no visible long diagnostics button text, no drag-and-drop image affordance, and no workflow selector in the Chrome extension MVP.
+- [x] DEC-020 The Chrome extension uses the A2gent brand image from `https://a2gent.net/a2gent.jpg` as a bundled local extension/action icon asset.
 
 ## Implementation boundaries
 - [ ] BOUND-001 `adapter-chrome`: extension manifest, content-script overlay injection, overlay UI, project selection UI, local Brute URL setting, automatic URL matching, initial full capture, lightweight refresh, manual full recapture, and Brute chat/session integration.
@@ -171,6 +172,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
 - Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.
 - The extension now supports screenshot focus annotation: **Draw focus** enables a page-level canvas below the adapter panel where users can drag freeform curves, **Done drawing** keeps the marks visible for the next screenshot, and **Cancel drawing** clears all marks. Full diagnostic payloads include compact `focus_annotation` stroke metadata when marks are present.
+- Extension icons now use bundled PNG sizes generated from the A2gent brand image at `https://a2gent.net/a2gent.jpg`; `manifest.json` wires the same assets for both extension listing and toolbar action icons.
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.
 - `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.
 - `brute` now persists project URL patterns, exposes them through project APIs, accepts extension-created session metadata through existing session APIs, and defaults the HTTP API port to `5445` for local app/extension onboarding.
