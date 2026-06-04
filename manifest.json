@@ -43,7 +43,7 @@
     },
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["src/drawingAnnotation.js", "src/contentDrawing.js", "src/contentScript.js"],
+      "js": ["src/drawingAnnotation.js", "src/contentDrawing.js", "src/contentUi.js", "src/contentScript.js"],
       "run_at": "document_start"
     }
   ]

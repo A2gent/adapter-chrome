@@ -49,13 +49,6 @@
     settingsOpen: false,
   };
 
-  const escapeHtml = (value) => String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-
   const clip = (value, max) => {
     const text = String(value || '');
     return text.length > max ? `${text.slice(0, max)}…[truncated]` : text;
