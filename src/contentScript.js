@@ -239,32 +239,53 @@
     }
   };
 
+  const serializeApiOptions = (options = {}) => {
+    const serialized = { method: options.method || 'GET' };
+    if (options.headers) serialized.headers = options.headers;
+    if (Object.prototype.hasOwnProperty.call(options, 'body')) serialized.body = options.body;
+    return serialized;
+  };
+
+  const sendRuntimeMessage = (message) => new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(response);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  const apiErrorDetail = (response) => {
+    const body = response?.body;
+    return body?.error || body?.message || response?.bodyText || `${response?.status || ''} ${response?.statusText || ''}`.trim() || 'Brute request failed.';
+  };
+
   const apiFetch = async (path, options = {}) => {
     const baseUrl = validateLoopbackBaseUrl(state.baseUrl || DEFAULT_BRUTE_BASE_URL);
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...options,
-      headers: {
-        Accept: 'application/json',
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-      },
+    // WHY: HTTPS host pages cannot directly fetch http://localhost due to Chrome's
+    // Private Network Access checks against the page origin.
+    // WHAT: ask the extension service worker to perform the loopback request under
+    // extension host_permissions, then normalize the response back to fetch-like data.
+    const proxied = await sendRuntimeMessage({
+      type: 'A2GENT_BRUTE_API_FETCH',
+      baseUrl,
+      path,
+      options: serializeApiOptions(options),
     });
-    if (!response.ok) {
-      let detail = `${response.status} ${response.statusText}`.trim();
-      try {
-        const body = await response.json();
-        detail = body.error || body.message || detail;
-      } catch {
-        try {
-          detail = await response.text();
-        } catch {
-          // Keep status fallback.
-        }
-      }
-      throw new Error(detail);
+    if (!proxied?.ok) {
+      throw new Error(proxied?.error || 'Brute request failed.');
+    }
+    const response = proxied.response;
+    if (!response?.ok) {
+      throw new Error(apiErrorDetail(response));
     }
     if (response.status === 204) return null;
-    return response.json();
+    return response.body;
   };
 
   const createSession = async (projectId, metadata) => apiFetch('/sessions', {
@@ -280,44 +301,96 @@
 
   const sendStreamMessage = async (sessionId, message, images = []) => {
     const baseUrl = validateLoopbackBaseUrl(state.baseUrl || DEFAULT_BRUTE_BASE_URL);
-    const response = await fetch(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/chat/stream`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/x-ndjson',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message, images }),
-    });
-    if (!response.ok || !response.body) {
-      let detail = `${response.status} ${response.statusText}`.trim();
-      try {
-        const body = await response.json();
-        detail = body.error || body.message || detail;
-      } catch {
-        // Ignore parse errors.
-      }
-      throw new Error(detail);
-    }
+    const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const streamPath = `/sessions/${encodeURIComponent(sessionId)}/chat/stream`;
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed === '') continue;
-        handleStreamEvent(JSON.parse(trimmed));
+    await new Promise((resolve, reject) => {
+      const port = chrome.runtime.connect({ name: 'A2GENT_BRUTE_STREAM' });
+      let settled = false;
+      let buffer = '';
+
+      const cleanup = () => {
+        try {
+          port.onMessage.removeListener(onMessage);
+          port.onDisconnect.removeListener(onDisconnect);
+        } catch {
+          // Ignore listener cleanup after an extension reload/disconnect.
+        }
+      };
+      const settle = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        try {
+          port.disconnect();
+        } catch {
+          // The port may already be disconnected by the service worker.
+        }
+        callback(value);
+      };
+      const fail = (error) => settle(reject, error instanceof Error ? error : new Error(String(error)));
+
+      const consumeChunk = (chunk) => {
+        buffer += String(chunk || '');
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed === '') continue;
+          handleStreamEvent(JSON.parse(trimmed));
+        }
+      };
+
+      function onMessage(portMessage) {
+        if (!portMessage || portMessage.requestId !== requestId) return;
+        try {
+          if (portMessage.type === 'A2GENT_BRUTE_STREAM_CHUNK') {
+            consumeChunk(portMessage.chunk);
+            return;
+          }
+          if (portMessage.type === 'A2GENT_BRUTE_STREAM_ERROR') {
+            fail(new Error(portMessage.error || 'Brute stream failed.'));
+            return;
+          }
+          if (portMessage.type === 'A2GENT_BRUTE_STREAM_DONE') {
+            const tail = buffer.trim();
+            if (tail) {
+              handleStreamEvent(JSON.parse(tail));
+            }
+            settle(resolve);
+          }
+        } catch (error) {
+          fail(error);
+        }
       }
-    }
-    const tail = buffer.trim();
-    if (tail) {
-      handleStreamEvent(JSON.parse(tail));
-    }
+
+      function onDisconnect() {
+        if (!settled) {
+          fail(new Error('Brute stream disconnected. Reload the extension and try again.'));
+        }
+      }
+
+      port.onMessage.addListener(onMessage);
+      port.onDisconnect.addListener(onDisconnect);
+      // WHY: streaming chat responses must also avoid direct localhost fetches from
+      // HTTPS page contexts, otherwise Chrome blocks them before Brute can respond.
+      // WHAT: open a runtime Port so the service worker can fetch and forward NDJSON
+      // chunks while this content script keeps the existing inline UI update logic.
+      port.postMessage({
+        type: 'A2GENT_BRUTE_STREAM_START',
+        requestId,
+        baseUrl,
+        path: streamPath,
+        options: serializeApiOptions({
+          method: 'POST',
+          headers: {
+            Accept: 'application/x-ndjson',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message, images }),
+        }),
+      });
+    });
   };
 
   const handleStreamEvent = (event) => {

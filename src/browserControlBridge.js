@@ -66,32 +66,53 @@
 
   const getBaseUrl = async () => validateLoopbackBaseUrl(await storageGet(STORAGE_BASE_URL_KEY) || DEFAULT_BRUTE_BASE_URL);
 
+  const serializeApiOptions = (options = {}) => {
+    const serialized = { method: options.method || 'GET' };
+    if (options.headers) serialized.headers = options.headers;
+    if (Object.prototype.hasOwnProperty.call(options, 'body')) serialized.body = options.body;
+    return serialized;
+  };
+
+  const sendRuntimeMessage = (message) => new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(response);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  const apiErrorDetail = (response) => {
+    const body = response?.body;
+    return body?.error || body?.message || response?.bodyText || `${response?.status || ''} ${response?.statusText || ''}`.trim() || 'Brute request failed.';
+  };
+
   const apiFetch = async (path, options = {}) => {
     const baseUrl = await getBaseUrl();
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...options,
-      headers: {
-        Accept: 'application/json',
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-      },
+    // WHY: when injected into HTTPS pages, direct content-script fetches to
+    // http://localhost are blocked by Chrome Private Network Access/CORS checks.
+    // WHAT: proxy Brute API calls through the extension service worker where
+    // manifest host_permissions authorize loopback access independently of page origin.
+    const proxied = await sendRuntimeMessage({
+      type: 'A2GENT_BRUTE_API_FETCH',
+      baseUrl,
+      path,
+      options: serializeApiOptions(options),
     });
-    if (!response.ok) {
-      let detail = `${response.status} ${response.statusText}`.trim();
-      try {
-        const body = await response.json();
-        detail = body.error || body.message || detail;
-      } catch {
-        try {
-          detail = await response.text();
-        } catch {
-          // Keep status fallback.
-        }
-      }
-      throw new Error(detail);
+    if (!proxied?.ok) {
+      throw new Error(proxied?.error || 'Brute request failed.');
+    }
+    const response = proxied.response;
+    if (!response?.ok) {
+      throw new Error(apiErrorDetail(response));
     }
     if (response.status === 204) return null;
-    return response.json();
+    return response.body;
   };
 
   const pageSnapshot = () => ({

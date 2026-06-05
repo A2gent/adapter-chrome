@@ -115,6 +115,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [x] DEC-012 Pattern resolution uses unique most-specific match wins; exact cross-project ties do not auto-select a URL-matched project and instead use the Knowledge Base default fallback when available.
 - [x] DEC-013 The automatic lightweight refresh payload contains only `captured_at`, current URL, current title, and selected text when present.
 - [x] DEC-014 The default local Brute base URL is `http://localhost:5445`, but the user may override it to another loopback URL.
+- [x] DEC-014A HTTPS-page Brute API access is proxied through the extension background service worker. Content scripts shall not call `fetch(http://localhost...)` directly because Chrome Private Network Access blocks HTTPS page origins from accessing loopback HTTP endpoints.
 - [x] DEC-015 Diagnostic context is represented as machine-readable JSON embedded in message text, plus image attachments and session metadata labels.
 - [x] DEC-016 Saved local Brute/agent URL and project-context settings are not part of the default overlay view; the user must explicitly open Settings to view or change them.
 - [x] DEC-017 Network diagnostics are context-size bounded: send only the latest 20 endpoint-level fetch/XHR records and compact timing entries, ordered by time, without request/response headers, request/response bodies, URL query strings, or URL fragments.
