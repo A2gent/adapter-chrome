@@ -1,6 +1,9 @@
 (() => {
   const MAX_LOGS = 400;
-  const MAX_NETWORK = 20;
+  const MAX_NETWORK_COMPACT = 20;
+  const MAX_NETWORK_FULL = 400;
+  const MAX_NETWORK_BODY_PREVIEW = 20000;
+  const MAX_NETWORK_HEADER_VALUE = 4000;
   const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
 
   const installKeyboardShield = () => {
@@ -97,6 +100,59 @@
     if (target.length > max) {
       target.splice(0, target.length - max);
     }
+
+  const headersToObject = (headers) => {
+    const out = {};
+    if (!headers) return out;
+    try {
+      const assign = (name, value) => {
+        const key = String(name || '').trim();
+        if (!key || /^(cookie|set-cookie)$/i.test(key)) return;
+        out[key] = clip(value, MAX_NETWORK_HEADER_VALUE);
+      };
+      if (typeof headers.forEach === 'function') {
+        headers.forEach((value, name) => assign(name, value));
+      } else if (Array.isArray(headers)) {
+        for (const [name, value] of headers) assign(name, value);
+      } else if (typeof headers === 'object') {
+        for (const [name, value] of Object.entries(headers)) assign(name, value);
+      }
+    } catch {
+      // Keep best-effort headers collected so far.
+    }
+    return out;
+  };
+
+  const bodyPreviewFromValue = (body) => {
+    if (body == null) return undefined;
+    if (typeof body === 'string') return clip(body, MAX_NETWORK_BODY_PREVIEW);
+    if (body instanceof URLSearchParams) return clip(body.toString(), MAX_NETWORK_BODY_PREVIEW);
+    if (body instanceof FormData) {
+      const entries = [];
+      for (const [name, value] of body.entries()) {
+        entries.push([name, value instanceof File ? `[file:${value.name || 'unnamed'}:${value.size}]` : clip(value, 1000)]);
+      }
+      return clip(JSON.stringify(entries), MAX_NETWORK_BODY_PREVIEW);
+    }
+    if (body instanceof Blob) return `[blob:${body.type || 'unknown'}:${body.size}]`;
+    if (body instanceof ArrayBuffer) return `[arraybuffer:${body.byteLength}]`;
+    if (ArrayBuffer.isView(body)) return `[typedarray:${body.byteLength}]`;
+    return clip(body, MAX_NETWORK_BODY_PREVIEW);
+  };
+
+  const responseBodyPreview = (response) => {
+    try {
+      const contentType = response.headers?.get?.('content-type') || '';
+      if (!/^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg\+xml)/i.test(contentType)) {
+        return undefined;
+      }
+      return response.clone().text()
+        .then((text) => clip(text, MAX_NETWORK_BODY_PREVIEW))
+        .catch(() => undefined);
+    } catch {
+      return Promise.resolve(undefined);
+    }
+  };
   };
 
   const serializeArgs = (args) => args.map((arg) => clip(arg, 4000));
@@ -144,15 +200,26 @@
     return out;
   };
 
+  const latestLogs = () => logs.slice(-MAX_LOGS);
+
   const latestNetwork = () => network
     .slice()
     .sort((a, b) => (Date.parse(a.captured_at || '') || 0) - (Date.parse(b.captured_at || '') || 0))
-    .slice(-MAX_NETWORK);
+    .slice(-MAX_NETWORK_COMPACT)
+    .map((entry) => entry.compact || compactNetworkEntry(entry));
 
   const recordNetwork = (entry) => {
-    // WHY: full request/response headers and bodies made diagnostic prompts too large.
-    // WHAT: retain only the latest compact endpoint-level records for the model.
-    pushBounded(network, compactNetworkEntry(entry), MAX_NETWORK);
+    // WHY: default diagnostic prompts must stay compact, while agent-driven tools can
+    // ask Brute for the full in-memory record on demand.
+    // WHAT: store bounded full records here, but latestNetwork() still returns compact latest-20.
+    pushBounded(network, {
+      ...entry,
+      captured_at: new Date().toISOString(),
+      method: String(entry.method || 'GET').toUpperCase(),
+      url: String(entry.url || ''),
+      compact: compactNetworkEntry(entry),
+      error_message: entry.error ? clip(entry.error instanceof Error ? entry.error.message || String(entry.error) : entry.error, 2000) : undefined,
+    }, MAX_NETWORK_FULL);
   };
 
   for (const level of ['debug', 'info', 'log', 'warn', 'error']) {
@@ -245,18 +312,74 @@
     };
   }
 
+  const fullNetwork = () => network
+    .slice()
+    .sort((a, b) => (Date.parse(a.captured_at || '') || 0) - (Date.parse(b.captured_at || '') || 0))
+    .map((entry) => {
+      const out = {
+        captured_at: entry.captured_at || new Date().toISOString(),
+        type: entry.type || 'network',
+        method: String(entry.method || 'GET').toUpperCase(),
+        url: String(entry.url || ''),
+      };
+      const status = Number(entry.status);
+      if (Number.isFinite(status)) out.status = status;
+      if (entry.statusText) out.status_text = clip(entry.statusText, 500);
+      const durationMs = Number(entry.durationMs);
+      if (Number.isFinite(durationMs)) out.duration_ms = Math.round(durationMs);
+      if (entry.error_message || entry.error) out.error_message = clip(entry.error_message || entry.error, 2000);
+      return out;
+    });
+
+  const serializeEvalResult = (value) => {
+    if (value === undefined) return null;
+    if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return value;
+    if (value instanceof Element) {
+      return {
+        node_type: 'element',
+        tag: value.tagName,
+        id: value.id || '',
+        class_name: value.className || '',
+        text: clip(value.textContent || '', 2000),
+      };
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return clip(String(value), 8000);
+    }
+  };
+
   window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data || event.data.type !== 'A2GENT_GET_PAGE_DIAGNOSTICS') {
+    if (event.source !== window || !event.data) {
       return;
     }
-    window.postMessage({
-      type: 'A2GENT_PAGE_DIAGNOSTICS',
-      requestId: event.data.requestId,
-      payload: {
-        console_logs: logs.slice(),
-        page_errors: errors.slice(),
-        network_activity: latestNetwork(),
-      },
-    }, '*');
+
+    if (event.data.type === 'A2GENT_GET_PAGE_DIAGNOSTICS') {
+      const detailLevel = event.data.detailLevel || 'compact';
+      const includeFull = detailLevel === 'full';
+      window.postMessage({
+        type: 'A2GENT_PAGE_DIAGNOSTICS',
+        requestId: event.data.requestId,
+        payload: {
+          console_logs: includeFull ? logs.slice() : latestLogs(),
+          page_errors: includeFull ? errors.slice() : errors.slice(-MAX_LOGS),
+          network_activity: includeFull ? fullNetwork() : latestNetwork(),
+        },
+      }, '*');
+      return;
+    }
+
+    if (event.data.type === 'A2GENT_PAGE_EVAL') {
+      const requestId = event.data.requestId;
+      Promise.resolve()
+        .then(() => (0, eval)(String(event.data.script || '')))
+        .then((result) => {
+          window.postMessage({ type: 'A2GENT_PAGE_EVAL_RESULT', requestId, ok: true, result: serializeEvalResult(result) }, '*');
+        })
+        .catch((error) => {
+          window.postMessage({ type: 'A2GENT_PAGE_EVAL_RESULT', requestId, ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }, '*');
+        });
+    }
   });
 })();

@@ -17,6 +17,7 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/contentDrawing.js',
     'src/contentUi.js',
     'src/contentScript.js',
+    'src/browserControlBridge.js',
   ]);
 
   for (const relativePath of scriptFiles) {
@@ -29,6 +30,6 @@ test('background fallback injection includes all isolated content helpers before
 
   assert.match(
     background,
-    /files: \['src\/drawingAnnotation\.js', 'src\/contentDrawing\.js', 'src\/contentUi\.js', 'src\/contentScript\.js'\]/,
+    /files: \['src\/drawingAnnotation\.js', 'src\/contentDrawing\.js', 'src\/contentUi\.js', 'src\/contentScript\.js', 'src\/browserControlBridge\.js'\]/,
   );
 });
