@@ -36,15 +36,40 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["src/pageHook.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "src/pageHook.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["src/drawingAnnotation.js", "src/contentDrawing.js", "src/contentUi.js", "src/contentScript.js", "src/browserControlBridge.js"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "src/drawingAnnotation.js",
+        "src/contentDrawing.js",
+        "src/contentUi.js",
+        "src/contentScript.js",
+        "src/browserControlBridge.js"
+      ],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "cursor.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ]
 }

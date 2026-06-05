@@ -29,6 +29,9 @@ test('browser control bridge exposes required agent command actions', () => {
   }
 
   assert.match(bridge, /a2gent-browser-adapter-ai-cursor/, 'bridge should render a visible virtual AI cursor');
+  assert.match(bridge, /CURSOR_IMAGE_PATH = 'cursor\.png'/, 'virtual cursor should use the bundled cursor asset');
+  assert.match(bridge, /CURSOR_WIDTH_PX = 24/, 'virtual cursor should render near normal pointer size');
+  assert.doesNotMatch(bridge, /border-radius:999px/, 'virtual cursor should not fall back to the old circular marker');
 });
 
 test('page hook can return full logs on demand without changing compact defaults', () => {

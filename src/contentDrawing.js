@@ -17,12 +17,49 @@
   let activeStroke = [];
   let strokes = [];
   let pointerId = null;
+  let scrollRedrawFrame = null;
 
-  const viewport = () => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-    devicePixelRatio: window.devicePixelRatio || 1,
+  const scrollPosition = () => ({
+    x: window.scrollX || window.pageXOffset || document.documentElement?.scrollLeft || document.body?.scrollLeft || 0,
+    y: window.scrollY || window.pageYOffset || document.documentElement?.scrollTop || document.body?.scrollTop || 0,
   });
+
+  const pageSize = () => {
+    const body = document.body;
+    const doc = document.documentElement;
+    return {
+      width: Math.max(
+        window.innerWidth,
+        body?.scrollWidth || 0,
+        body?.offsetWidth || 0,
+        doc?.scrollWidth || 0,
+        doc?.offsetWidth || 0,
+        doc?.clientWidth || 0,
+      ),
+      height: Math.max(
+        window.innerHeight,
+        body?.scrollHeight || 0,
+        body?.offsetHeight || 0,
+        doc?.scrollHeight || 0,
+        doc?.offsetHeight || 0,
+        doc?.clientHeight || 0,
+      ),
+    };
+  };
+
+  const viewport = () => {
+    const size = pageSize();
+    const scroll = scrollPosition();
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      pageWidth: size.width,
+      pageHeight: size.height,
+      scrollX: scroll.x,
+      scrollY: scroll.y,
+    };
+  };
 
   const emitChange = () => {
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT, {
@@ -34,7 +71,16 @@
     }));
   };
 
-  const pointFromEvent = (event) => ({ x: event.clientX, y: event.clientY });
+  // WHY: drawing should stay attached to page content, not to the current viewport.
+  // WHAT: store pointer samples in document/page CSS pixels and translate them back when rendering.
+  const pointFromEvent = (event) => {
+    const scroll = scrollPosition();
+    return { x: event.clientX + scroll.x, y: event.clientY + scroll.y };
+  };
+  const pointToCanvas = (point) => {
+    const scroll = scrollPosition();
+    return { x: point.x - scroll.x, y: point.y - scroll.y };
+  };
 
   const drawStroke = (points, active = false) => {
     if (!context || points.length < 2) return;
@@ -45,10 +91,12 @@
     context.lineWidth = active ? 5 : 6;
     context.shadowColor = 'rgba(0, 0, 0, 0.72)';
     context.shadowBlur = 7;
+    const firstPoint = pointToCanvas(points[0]);
     context.beginPath();
-    context.moveTo(points[0].x, points[0].y);
+    context.moveTo(firstPoint.x, firstPoint.y);
     for (const point of points.slice(1)) {
-      context.lineTo(point.x, point.y);
+      const canvasPoint = pointToCanvas(point);
+      context.lineTo(canvasPoint.x, canvasPoint.y);
     }
     context.stroke();
     context.restore();
@@ -65,6 +113,14 @@
     }
     drawStroke(activeStroke, true);
     context.restore();
+  };
+
+  const scheduleRedraw = () => {
+    if (scrollRedrawFrame) return;
+    scrollRedrawFrame = window.requestAnimationFrame(() => {
+      scrollRedrawFrame = null;
+      redraw();
+    });
   };
 
   const resizeCanvas = () => {
@@ -189,6 +245,7 @@
     canvas.addEventListener('pointerup', finishStroke);
     canvas.addEventListener('pointercancel', finishStroke);
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('scroll', scheduleRedraw, { passive: true });
     resizeCanvas();
     applyVisibility();
   };

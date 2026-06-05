@@ -4,7 +4,7 @@
   const MAX_NETWORK_FULL = 400;
   const MAX_NETWORK_BODY_PREVIEW = 20000;
   const MAX_NETWORK_HEADER_VALUE = 4000;
-  const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
+  const OVERLAY_SUBMIT_EVENT = 'a2gent-overlay-submit';
 
   const installKeyboardShield = () => {
     if (window.__A2GENT_BROWSER_ADAPTER_KEYBOARD_SHIELDED__) {
@@ -47,13 +47,25 @@
       return '';
     };
 
+    // WHY: overlay composers should submit like chat inputs while the host page is shielded from shortcuts.
+    // WHAT: plain Enter submits, Shift+Enter inserts a newline, and IME composition Enter is ignored.
+    const shouldSubmitOverlayComposer = (event, role) => (
+      event.type === 'keydown'
+      && (role === 'prompt' || role === 'followup')
+      && event.key === 'Enter'
+      && !event.shiftKey
+      && !event.isComposing
+      && event.keyCode !== 229
+    );
+
     const handleOverlayKeyboardEvent = (event) => {
       const host = getOverlayHost();
       if (!isOverlayOpen(host) || !isOverlayKeyboardEvent(event, host)) return;
 
-      if (event.type === 'keydown' && overlayEventRole(event) === 'followup' && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      const role = overlayEventRole(event);
+      if (shouldSubmitOverlayComposer(event, role)) {
         event.preventDefault();
-        window.dispatchEvent(new CustomEvent(OVERLAY_SEND_FOLLOWUP_EVENT));
+        window.dispatchEvent(new CustomEvent(OVERLAY_SUBMIT_EVENT, { detail: role }));
       }
 
       // WHY: site shortcut handlers such as YouTube's live in the page's MAIN world, where

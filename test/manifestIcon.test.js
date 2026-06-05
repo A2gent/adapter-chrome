@@ -37,3 +37,14 @@ test('manifest uses bundled A2gent icon assets for extension and toolbar icons',
     });
   }
 });
+
+
+test('bundled virtual cursor asset is compact enough for pointer-like rendering', () => {
+  const cursorPath = path.join(repoRoot, 'cursor.png');
+
+  assert.equal(fs.existsSync(cursorPath), true, 'cursor.png should be bundled with the extension');
+  assert.deepEqual(readPngDimensions(cursorPath), {
+    width: 48,
+    height: 70,
+  });
+});

@@ -1,18 +1,35 @@
 ((root) => {
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+  const numeric = (value, fallback = 0) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+
+  const positiveInt = (value, fallback = 1) => Math.max(1, Math.round(numeric(value, fallback)));
+
+  const coordinateBounds = (viewport) => ({
+    // WHY: focus strokes are now stored in page coordinates so they can scroll with content.
+    // WHAT: prefer full page bounds when provided, while keeping the old viewport-only API working.
+    width: positiveInt(viewport?.pageWidth ?? viewport?.documentWidth ?? viewport?.width, 1),
+    height: positiveInt(viewport?.pageHeight ?? viewport?.documentHeight ?? viewport?.height, 1),
+  });
+
+  const viewportMetadata = (viewport) => ({
+    width: positiveInt(viewport?.width, 1),
+    height: positiveInt(viewport?.height, 1),
+    device_pixel_ratio: numeric(viewport?.devicePixelRatio, 1) || 1,
+  });
+
   const toPoint = (input, bounds) => ({
-    x: clamp(Math.round(Number(input?.x) || 0), 0, bounds.width),
-    y: clamp(Math.round(Number(input?.y) || 0), 0, bounds.height),
+    x: clamp(Math.round(numeric(input?.x, 0)), 0, bounds.width),
+    y: clamp(Math.round(numeric(input?.y, 0)), 0, bounds.height),
   });
 
   const samePoint = (left, right) => left && right && left.x === right.x && left.y === right.y;
 
   const createStroke = (rawPoints, viewport) => {
-    const bounds = {
-      width: Math.max(1, Math.round(Number(viewport?.width) || 1)),
-      height: Math.max(1, Math.round(Number(viewport?.height) || 1)),
-    };
+    const bounds = coordinateBounds(viewport);
     const points = [];
     for (const rawPoint of Array.isArray(rawPoints) ? rawPoints : []) {
       const point = toPoint(rawPoint, bounds);
@@ -31,12 +48,9 @@
     return {
       schema: 'a2gent.browser.annotation.v1',
       type: 'freeform_curve',
-      viewport: {
-        width: Math.max(1, Math.round(Number(viewport?.width) || 1)),
-        height: Math.max(1, Math.round(Number(viewport?.height) || 1)),
-        device_pixel_ratio: Number(viewport?.devicePixelRatio) || 1,
-      },
-      strokes: normalizedStrokes,
+      viewport: viewportMetadata(viewport),
+      // WHY: screenshots already carry the visible focus curves.
+      // WHAT: keep only compact metadata in default prompts instead of duplicating every stroke point.
       stroke_count: normalizedStrokes.length,
       point_count: normalizedStrokes.reduce((total, stroke) => total + stroke.length, 0),
     };

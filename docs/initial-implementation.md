@@ -54,6 +54,7 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - [ ] REQ-F-023 The extension shall let the user explicitly trigger a full recapture of the maximum diagnostic bundle during inline continuation.
 - [ ] REQ-F-024 The extension shall default the Brute base URL to `http://localhost:5445` and allow the user to override it to another loopback URL.
 - [ ] REQ-F-025 The MVP shall encode diagnostic context as a machine-readable JSON block embedded in the message text sent to Brute, with screenshots attached as images and extension/session source labels stored in session metadata.
+- [ ] REQ-F-026 Extension composer textareas shall use chat-style keyboard behavior: `Enter` submits the current new-session prompt or follow-up message, while `Shift+Enter` inserts a newline.
 
 ### Non-functional
 #### Performance
@@ -171,7 +172,8 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 - The default unopened-session overlay now uses a compact Caesar-like composer: one prompt textarea with a circular send-icon button, no visible long diagnostics button text, no drag-and-drop image affordance, and no workflow selector.
 - The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
 - Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.
-- The extension now supports screenshot focus annotation: **Draw focus** enables a page-level canvas below the adapter panel where users can drag freeform curves, **Done drawing** keeps the marks visible for the next screenshot, and **Cancel drawing** clears all marks. Full diagnostic payloads include compact `focus_annotation` stroke metadata when marks are present.
+- The extension now supports screenshot focus annotation: **Draw focus** enables a page-level canvas below the adapter panel where users can drag freeform curves; marks are stored in document coordinates and re-rendered on scroll so they stay attached to page content. **Done drawing** keeps the marks visible for the next screenshot, and **Cancel drawing** clears all marks. Full diagnostic payloads include only compact `focus_annotation` counters when marks are present; stroke coordinates are omitted because the screenshot already carries the visual annotation.
+- Default extension-created diagnostic messages no longer include `browser_observed_state` / `performance_entries`; agents can fetch browser-observed state explicitly through extension tool calls when needed.
 - Extension icons now use bundled PNG sizes generated from the A2gent brand image at `https://a2gent.net/a2gent.jpg`; `manifest.json` wires the same assets for both extension listing and toolbar action icons.
 - `adapter-chrome` now contains an unpacked MV3 extension with bottom overlay, loopback-only Brute URL setting, project auto-detection, full diagnostic capture, lightweight continuation refresh, explicit full recapture, and Brute session/chat-stream integration.
 - `caesar` now exposes project URL patterns in Project Settings and displays a Chrome Extension source chip for extension-created sessions.

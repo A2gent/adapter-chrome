@@ -33,3 +33,14 @@ test('background fallback injection includes all isolated content helpers before
     /files: \['src\/drawingAnnotation\.js', 'src\/contentDrawing\.js', 'src\/contentUi\.js', 'src\/contentScript\.js', 'src\/browserControlBridge\.js'\]/,
   );
 });
+
+
+test('manifest exposes the virtual cursor image to content-injected page DOM', () => {
+  assert.deepEqual(manifest.web_accessible_resources, [
+    {
+      resources: ['cursor.png'],
+      matches: ['http://*/*', 'https://*/*'],
+    },
+  ]);
+  assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
+});

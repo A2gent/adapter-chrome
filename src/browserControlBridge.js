@@ -10,6 +10,9 @@
   const EXTENSION_VERSION = '0.1.0';
   const PAGE_ID_KEY = 'a2gent.adapterChrome.pageId';
   const CURSOR_ID = 'a2gent-browser-adapter-ai-cursor';
+  const CURSOR_IMAGE_PATH = 'cursor.png';
+  const CURSOR_WIDTH_PX = 24;
+  const CURSOR_HEIGHT_PX = 35;
   const POLL_TIMEOUT_MS = 25000;
   const POLL_RETRY_MS = 1500;
   const MAX_TEXT = 60000;
@@ -130,25 +133,29 @@
     cursor = document.createElement('div');
     cursor.id = CURSOR_ID;
     cursor.setAttribute('aria-hidden', 'true');
+
+    // WHY: a cursor-shaped asset makes agent-controlled movement feel like a real pointer,
+    // instead of the previous oversized purple target marker.
+    // WHAT: render the bundled PNG at normal cursor size and anchor its tip at the command coordinates.
     cursor.style.cssText = [
       'position:fixed',
       'left:0',
       'top:0',
-      'width:18px',
-      'height:18px',
-      'border:2px solid #7c3aed',
-      'border-radius:999px',
-      'box-shadow:0 0 0 4px rgba(124,58,237,.20),0 2px 10px rgba(0,0,0,.25)',
-      'background:rgba(124,58,237,.14)',
+      `width:${CURSOR_WIDTH_PX}px`,
+      `height:${CURSOR_HEIGHT_PX}px`,
+      'background-repeat:no-repeat',
+      'background-position:left top',
+      'background-size:100% 100%',
+      'filter:drop-shadow(0 2px 3px rgba(0,0,0,.32))',
       'z-index:2147483646',
       'pointer-events:none',
-      'transform:translate(-50%,-50%)',
+      'transform:translate(0,0)',
+      'transform-origin:0 0',
       'transition:left 120ms ease-out,top 120ms ease-out,opacity 160ms ease-out',
+      'will-change:left,top,transform,opacity',
       'opacity:0',
     ].join(';');
-    const dot = document.createElement('div');
-    dot.style.cssText = 'position:absolute;left:50%;top:50%;width:4px;height:4px;margin-left:-2px;margin-top:-2px;border-radius:999px;background:#7c3aed';
-    cursor.appendChild(dot);
+    cursor.style.backgroundImage = `url("${chrome.runtime.getURL(CURSOR_IMAGE_PATH)}")`;
     document.documentElement.appendChild(cursor);
     return cursor;
   };
@@ -166,9 +173,9 @@
   const flashCursor = () => {
     const cursor = ensureCursor();
     cursor.animate([
-      { transform: 'translate(-50%,-50%) scale(1)' },
-      { transform: 'translate(-50%,-50%) scale(.72)' },
-      { transform: 'translate(-50%,-50%) scale(1)' },
+      { transform: 'translate(0,0) scale(1)' },
+      { transform: 'translate(0,0) scale(.86)' },
+      { transform: 'translate(0,0) scale(1)' },
     ], { duration: 180, easing: 'ease-out' });
   };
 

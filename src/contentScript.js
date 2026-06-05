@@ -9,14 +9,13 @@
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
-  const OVERLAY_SEND_FOLLOWUP_EVENT = 'a2gent-overlay-send-followup';
+  const OVERLAY_SUBMIT_EVENT = 'a2gent-overlay-submit';
   const DRAWING_CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
   const DRAWING_ROOT_ID = 'a2gent-browser-adapter-drawing-root';
   const MAX_SELECTED_TEXT_LIGHT = 4000;
   const MAX_SELECTED_TEXT_FULL = 12000;
   const MAX_DOM_HTML = 180000;
   const MAX_DOM_TEXT = 60000;
-  const MAX_PERF_ENTRIES = 20;
   const MAX_NETWORK_ENTRIES = 20;
   // WHY: the unopened-session overlay should behave like Caesar's compact composer
   // instead of covering a large part of the current browser page.
@@ -90,6 +89,17 @@
     return '';
   };
 
+  // WHY: overlay composers should behave like chat inputs, not plain textareas.
+  // WHAT: Enter submits, Shift+Enter keeps the textarea newline, and IME confirmation is left alone.
+  const shouldSubmitOverlayComposer = (event, role) => (
+    event.type === 'keydown'
+    && (role === 'prompt' || role === 'followup')
+    && event.key === 'Enter'
+    && !event.shiftKey
+    && !event.isComposing
+    && event.keyCode !== 229
+  );
+
   const isFocusableOverlayControl = (element) => (
     element
     && typeof element.getAttribute === 'function'
@@ -148,10 +158,10 @@
     if (!isOverlayEvent(event)) return;
 
     const role = roleFromOverlayEvent(event);
-    if (event.type === 'keydown' && role === 'followup' && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    if (shouldSubmitOverlayComposer(event, role)) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      window.dispatchEvent(new CustomEvent(OVERLAY_SEND_FOLLOWUP_EVENT));
+      window.dispatchEvent(new CustomEvent(OVERLAY_SUBMIT_EVENT, { detail: role }));
       return;
     }
 
@@ -464,35 +474,6 @@
   };
 
   const getDrawingSummary = () => getDrawingOverlay()?.getSummary?.() || null;
-  const performanceEntryName = (entry) => {
-    if (entry.entryType === 'resource' || entry.entryType === 'navigation') {
-      return endpointFromUrl(entry.name);
-    }
-    return String(entry.name || '');
-  };
-
-  const collectPerformanceEntries = () => {
-    try {
-      return performance.getEntries()
-        .filter((entry) => entry.entryType === 'navigation' || entry.entryType === 'resource' || entry.entryType === 'paint')
-        .sort((a, b) => a.startTime - b.startTime)
-        .slice(-MAX_PERF_ENTRIES)
-        .map((entry) => {
-          const out = {
-            name: performanceEntryName(entry),
-            entry_type: entry.entryType,
-            start_time: Math.round(entry.startTime),
-            duration: Math.round(entry.duration),
-          };
-          if (entry.initiatorType) {
-            out.initiator_type = entry.initiatorType;
-          }
-          return out;
-        });
-    } catch {
-      return [];
-    }
-  };
 
   const collectDomSnapshot = () => {
     const clone = document.documentElement.cloneNode(true);
@@ -547,9 +528,6 @@
         focus_annotation: focusAnnotation || undefined,
         selected_text: getSelectionText(MAX_SELECTED_TEXT_FULL),
         dom_snapshot: collectDomSnapshot(),
-        browser_observed_state: {
-          performance_entries: collectPerformanceEntries(),
-        },
         console_logs: pageDiagnostics.console_logs || [],
         page_errors: pageDiagnostics.page_errors || [],
         network_activity: compactNetworkActivity(pageDiagnostics.network_activity),
@@ -693,6 +671,7 @@
   };
 
   const startSession = async () => {
+    if (state.busy) return;
     const prompt = state.prompt.trim();
     if (!prompt) {
       setState({ error: 'Describe what the agent should investigate.' });
@@ -751,7 +730,17 @@
     }
   };
 
-  window.addEventListener(OVERLAY_SEND_FOLLOWUP_EVENT, () => void sendFollowup());
+  const submitOverlayComposer = (role) => {
+    if (role === 'prompt') {
+      void startSession();
+      return;
+    }
+    if (role === 'followup') {
+      void sendFollowup();
+    }
+  };
+
+  window.addEventListener(OVERLAY_SUBMIT_EVENT, (event) => submitOverlayComposer(event.detail));
   window.addEventListener(DRAWING_CHANGE_EVENT, (event) => {
     const detail = event.detail || {};
     setState({
@@ -822,11 +811,13 @@
     shadow.querySelector('[data-role="send"]')?.addEventListener('click', () => void sendFollowup());
     shadow.querySelector('[data-role="recapture"]')?.addEventListener('click', () => void sendFullRecapture());
     shadow.querySelector('[data-role="open-session"]')?.addEventListener('click', () => openSessionDetail());
-    shadow.querySelector('[data-role="followup"]')?.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    shadow.querySelectorAll('[data-role="prompt"], [data-role="followup"]').forEach((textarea) => {
+      textarea.addEventListener('keydown', (event) => {
+        const role = event.currentTarget?.getAttribute?.('data-role') || '';
+        if (!shouldSubmitOverlayComposer(event, role)) return;
         event.preventDefault();
-        void sendFollowup();
-      }
+        submitOverlayComposer(role);
+      });
     });
 
     const resize = shadow.querySelector('[data-role="resize"]');

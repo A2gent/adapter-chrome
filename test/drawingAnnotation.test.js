@@ -22,7 +22,21 @@ test('createStroke ignores tap-only annotations because screenshots need visible
   assert.equal(createStroke([{ x: 10, y: 10 }], { width: 100, height: 100 }), null);
 });
 
-test('summarizeDrawing returns compact metadata for all visible freeform strokes', () => {
+test('createStroke preserves document coordinates beyond the visible viewport', () => {
+  const stroke = createStroke([
+    { x: 180, y: 280 },
+    { x: 220, y: 360 },
+    { x: 900, y: 1200 },
+  ], { width: 200, height: 300, pageWidth: 800, pageHeight: 1000 });
+
+  assert.deepEqual(stroke, [
+    { x: 180, y: 280 },
+    { x: 220, y: 360 },
+    { x: 800, y: 1000 },
+  ]);
+});
+
+test('summarizeDrawing returns compact metadata without duplicating stroke coordinates', () => {
   const summary = summarizeDrawing([
     [{ x: 1, y: 1 }, { x: 2, y: 2 }],
     [{ x: 10, y: 10 }],
@@ -33,10 +47,6 @@ test('summarizeDrawing returns compact metadata for all visible freeform strokes
     schema: 'a2gent.browser.annotation.v1',
     type: 'freeform_curve',
     viewport: { width: 300, height: 200, device_pixel_ratio: 2 },
-    strokes: [
-      [{ x: 1, y: 1 }, { x: 2, y: 2 }],
-      [{ x: 5, y: 5 }, { x: 6, y: 6 }],
-    ],
     stroke_count: 2,
     point_count: 4,
   });

@@ -44,7 +44,7 @@
 
   const renderCreation = (state) => `
     <section class="create-composer" aria-label="Create a new A2gent session">
-      <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat...">${escapeHtml(state.prompt)}</textarea>
+      <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat... Enter to send, Shift+Enter for newline.">${escapeHtml(state.prompt)}</textarea>
       <button
         type="button"
         data-role="create"
@@ -66,7 +66,7 @@
     <section class="messages">${messages}</section>
     ${renderDrawingControls(state)}
     <section class="followup-row">
-      <textarea data-role="followup" placeholder="Follow up. Cmd/Ctrl+Enter to send with lightweight refreshed page context.">${escapeHtml(state.followup)}</textarea>
+      <textarea data-role="followup" placeholder="Follow up. Enter to send, Shift+Enter for newline.">${escapeHtml(state.followup)}</textarea>
       <div class="actions continuation-actions">
         <button type="button" data-role="open-session" class="secondary">Open Session</button>
         <button type="button" data-role="recapture" class="secondary" ${state.busy ? 'disabled' : ''}>

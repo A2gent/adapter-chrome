@@ -21,7 +21,7 @@ The extension defaults to `http://localhost:5445`. Connection and project-contex
 
 ## Host page event isolation
 
-The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped in both the extension's isolated content-script world and the page's main world before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay. The overlay also preserves textarea/input focus and selection across internal re-renders, preventing focus from falling back to the host page while projects load or session status updates.
+The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped in both the extension's isolated content-script world and the page's main world before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay. Composer textareas use chat-style keyboard behavior: `Enter` submits the current prompt/follow-up, while `Shift+Enter` inserts a newline. The overlay also preserves textarea/input focus and selection across internal re-renders, preventing focus from falling back to the host page while projects load or session status updates.
 
 ## Project URL patterns
 
@@ -50,11 +50,10 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Current page URL and title.
 - User prompt text.
 - Current selected text when present.
-- Visible-page screenshot as an image attachment. If the user uses **Draw focus** first, the screenshot includes the freeform red focus curve and the JSON bundle includes compact `focus_annotation` stroke metadata.
+- Visible-page screenshot as an image attachment. If the user uses **Draw focus** first, the screenshot includes the freeform red focus curve and the JSON bundle includes only compact `focus_annotation` counters, not stroke coordinates.
 - DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
 - Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
-- Performance/resource timing entries limited to the latest 20 compact endpoint-level entries.
 
 The diagnostic bundle is embedded as a machine-readable JSON block in the Brute message text. Screenshots are sent as Brute image attachments. Created sessions include metadata labels such as `source: "adapter-chrome"` and `created_by: "adapter-chrome-extension"`, so Caesar can display that they came from the extension.
 
@@ -64,6 +63,10 @@ The extension intentionally does **not** collect or transmit cookies or browser 
 
 Aside from those explicit exclusions, the MVP diagnostic bundle may contain highly sensitive page data, including PII, page text, form text rendered in the DOM, screenshots, console output, and runtime errors. Use it only with pages and local Brute instances you trust.
 
+## Agent browser control cursor
+
+When an external agent controls the page through the browser adapter, the extension renders a visible virtual cursor. The cursor uses the bundled `cursor.png` asset, exposed via MV3 `web_accessible_resources`, and displays it at normal pointer scale so the cursor tip aligns with click/move command coordinates without obscuring the page.
+
 ## Inline continuation
 
 After the initial session is created, the overlay stays in an inline continuation mode:
@@ -72,4 +75,4 @@ After the initial session is created, the overlay stays in an inline continuatio
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
 - The **Open Session** button opens the created session in Caesar's browser session detail view.
 - The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot from the continuation buttons row.
-- The **Draw focus** button is available before initial creation and before full recapture. It lets the user drag freeform curves over the page area, keeps those curves visible for the next screenshot, and **Cancel drawing** clears all drawn focus marks.
+- The **Draw focus** button is available before initial creation and before full recapture. It lets the user drag freeform curves over the page area; marks are anchored to document coordinates so they scroll with the content, remain visible for the next screenshot, and **Cancel drawing** clears all drawn focus marks.
