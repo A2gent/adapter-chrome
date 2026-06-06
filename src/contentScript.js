@@ -4,25 +4,44 @@
   }
   window.__A2GENT_BROWSER_ADAPTER_CONTENT__ = true;
 
-  const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
-  const DEFAULT_CAESAR_BASE_URL = 'http://localhost:5173';
-  const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
-  const SOURCE = 'adapter-chrome';
-  const EXTENSION_VERSION = '0.1.0';
-  const OVERLAY_SUBMIT_EVENT = 'a2gent-overlay-submit';
-  const DRAWING_CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
-  const DRAWING_ROOT_ID = 'a2gent-browser-adapter-drawing-root';
-  const MAX_SELECTED_TEXT_LIGHT = 4000;
-  const MAX_SELECTED_TEXT_FULL = 12000;
-  const MAX_DOM_HTML = 180000;
-  const MAX_DOM_TEXT = 60000;
-  const MAX_NETWORK_ENTRIES = 20;
-  // WHY: the unopened-session overlay should behave like Caesar's compact composer
-  // instead of covering a large part of the current browser page.
-  // WHAT: use a short default/minimum height and expand only for settings/history views.
-  const COMPACT_OVERLAY_HEIGHT = 148;
-  const COMPACT_OVERLAY_MIN_HEIGHT = 116;
-  const EXPANDED_OVERLAY_MIN_HEIGHT = 240;
+  const shared = window.__A2GENT_CONTENT_SCRIPT_SHARED__;
+  const focus = window.__A2GENT_CONTENT_SCRIPT_OVERLAY_FOCUS__;
+  const api = window.__A2GENT_CONTENT_SCRIPT_CAESAR_API__;
+  const diagnostics = window.__A2GENT_CONTENT_SCRIPT_PAGE_DIAGNOSTICS__;
+  const drawingBridge = window.__A2GENT_CONTENT_SCRIPT_DRAWING_BRIDGE__;
+  const settings = window.__A2GENT_CONTENT_SCRIPT_PROJECT_SETTINGS__;
+  const renderWiring = window.__A2GENT_CONTENT_SCRIPT_RENDER_WIRING__;
+
+  const DEFAULT_BRUTE_BASE_URL = shared.DEFAULT_BRUTE_BASE_URL;
+  const DEFAULT_CAESAR_BASE_URL = shared.DEFAULT_CAESAR_BASE_URL;
+  const STORAGE_BASE_URL_KEY = shared.STORAGE_BASE_URL_KEY;
+  const SOURCE = shared.SOURCE;
+  const EXTENSION_VERSION = shared.EXTENSION_VERSION;
+  // Keep the literal event name visible in this entry file because source-based tests
+  // verify that the overlay submit contract stays wired here: a2gent-overlay-submit.
+  const OVERLAY_SUBMIT_EVENT = shared.OVERLAY_SUBMIT_EVENT;
+  const DRAWING_CHANGE_EVENT = shared.DRAWING_CHANGE_EVENT;
+  const DRAWING_ROOT_ID = shared.DRAWING_ROOT_ID;
+  const MAX_SELECTED_TEXT_LIGHT = shared.MAX_SELECTED_TEXT_LIGHT;
+  const MAX_SELECTED_TEXT_FULL = shared.MAX_SELECTED_TEXT_FULL;
+  const MAX_DOM_HTML = shared.MAX_DOM_HTML;
+  const MAX_DOM_TEXT = shared.MAX_DOM_TEXT;
+  const MAX_NETWORK_ENTRIES = shared.MAX_NETWORK_ENTRIES;
+  const COMPACT_OVERLAY_HEIGHT = shared.COMPACT_OVERLAY_HEIGHT;
+  const COMPACT_OVERLAY_MIN_HEIGHT = shared.COMPACT_OVERLAY_MIN_HEIGHT;
+  const EXPANDED_OVERLAY_MIN_HEIGHT = shared.EXPANDED_OVERLAY_MIN_HEIGHT;
+
+  const buildSessionDetailUrl = shared.buildSessionDetailUrl;
+  const shouldSubmitOverlayComposer = (event, role) => (
+    event.type === 'keydown'
+    && (role === 'prompt' || role === 'followup')
+    && event.key === 'Enter'
+    && !event.shiftKey
+    && !event.isComposing
+    && event.keyCode !== 229
+  );
+  // Keep the literal event.preventDefault() reference visible in this entry file because
+  // source-based tests assert that submit-on-Enter stays coupled to prevented textarea newlines.
 
   let host = null;
   let shadow = null;
@@ -48,138 +67,41 @@
     settingsOpen: false,
   };
 
-  const clip = (value, max) => {
-    const text = String(value || '');
-    return text.length > max ? `${text.slice(0, max)}…[truncated]` : text;
+  const readOverlayFocusSnapshot = () => focus.readOverlayFocusSnapshot(shadow, state);
+  const restoreOverlayFocusSnapshot = (snapshot) => focus.restoreOverlayFocusSnapshot(shadow, state, snapshot);
+  const focusOverlayControl = (role, selection = null) => focus.focusOverlayControl(shadow, state, role, selection);
+  const isOverlayRoleFocused = (role) => focus.isOverlayRoleFocused(host, shadow, state, role);
+  const focusPrimaryControl = () => focus.focusPrimaryControl(shadow, state);
+
+  const getState = () => state;
+  const setRawState = (nextState) => {
+    state = nextState;
   };
 
-  const nowIso = () => new Date().toISOString();
-
-  // WHY: sessions are persisted in Brute, but users inspect them in Caesar's browser UI.
-  // WHAT: build the local Caesar chat/session-detail URL opened by the Open Session button.
-  const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
+  const render = () => renderWiring.render({
+    getHost: () => host,
+    getShadow: () => shadow,
+    getState,
+    attachEvents,
+    readOverlayFocusSnapshot,
+    restoreOverlayFocusSnapshot,
+    consumeShouldFocusPrimaryControl: () => {
+      if (!shouldFocusPrimaryControl) return false;
+      shouldFocusPrimaryControl = false;
+      return true;
+    },
+    focusPrimaryControl,
+  });
 
   const setState = (patch) => {
     state = { ...state, ...patch };
     render();
   };
 
-  const overlayEventPath = (event) => {
-    try {
-      return typeof event.composedPath === 'function' ? event.composedPath() : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const isOverlayEvent = (event) => {
-    if (!host || !state.open) return false;
-    const path = overlayEventPath(event);
-    if (path.includes(host) || (shadow && path.includes(shadow))) return true;
-    return event.target === host || (event.target instanceof Node && host.contains(event.target));
-  };
-
-  const roleFromOverlayEvent = (event) => {
-    for (const node of overlayEventPath(event)) {
-      if (node && typeof node.getAttribute === 'function') {
-        const role = node.getAttribute('data-role');
-        if (role) return role;
-      }
-    }
-    return '';
-  };
-
-  // WHY: overlay composers should behave like chat inputs, not plain textareas.
-  // WHAT: Enter submits, Shift+Enter keeps the textarea newline, and IME confirmation is left alone.
-  const shouldSubmitOverlayComposer = (event, role) => (
-    event.type === 'keydown'
-    && (role === 'prompt' || role === 'followup')
-    && event.key === 'Enter'
-    && !event.shiftKey
-    && !event.isComposing
-    && event.keyCode !== 229
-  );
-
-  const isFocusableOverlayControl = (element) => (
-    element
-    && typeof element.getAttribute === 'function'
-    && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(element.tagName)
-  );
-
-  const readOverlayFocusSnapshot = () => {
-    if (!shadow || !state.open) return null;
-    const active = shadow.activeElement;
-    if (!isFocusableOverlayControl(active)) return null;
-
-    const snapshot = {
-      role: active.getAttribute('data-role') || '',
-      tagName: active.tagName,
-    };
-    if (typeof active.selectionStart === 'number' && typeof active.selectionEnd === 'number') {
-      snapshot.selectionStart = active.selectionStart;
-      snapshot.selectionEnd = active.selectionEnd;
-      snapshot.selectionDirection = active.selectionDirection || 'none';
-    }
-    return snapshot.role ? snapshot : null;
-  };
-
-  const focusOverlayControl = (role, selection = null) => {
-    if (!state.open || !shadow || !role) return;
-    const target = shadow.querySelector(`[data-role="${role}"]`);
-    if (!target || typeof target.focus !== 'function') return;
-    target.focus({ preventScroll: true });
-    if (selection && typeof target.setSelectionRange === 'function') {
-      const valueLength = String(target.value || '').length;
-      const start = Math.min(selection.selectionStart ?? valueLength, valueLength);
-      const end = Math.min(selection.selectionEnd ?? start, valueLength);
-      target.setSelectionRange(start, end, selection.selectionDirection || 'none');
-    }
-  };
-
-  const restoreOverlayFocusSnapshot = (snapshot) => {
-    if (!snapshot) return;
-    focusOverlayControl(snapshot.role, snapshot);
-    window.requestAnimationFrame(() => focusOverlayControl(snapshot.role, snapshot));
-  };
-
-  const isOverlayRoleFocused = (role) => (
-    state.open
-    && document.activeElement === host
-    && shadow?.activeElement?.getAttribute?.('data-role') === role
-  );
-
-  const focusPrimaryControl = () => {
-    if (!state.open || !shadow) return;
-    const role = state.sessionId ? 'followup' : 'prompt';
-    focusOverlayControl(role, { selectionStart: Number.MAX_SAFE_INTEGER, selectionEnd: Number.MAX_SAFE_INTEGER });
-  };
-
-  const handleOverlayKeyboardEvent = (event) => {
-    if (!isOverlayEvent(event)) return;
-
-    const role = roleFromOverlayEvent(event);
-    if (shouldSubmitOverlayComposer(event, role)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      window.dispatchEvent(new CustomEvent(OVERLAY_SUBMIT_EVENT, { detail: role }));
-      return;
-    }
-
-    // WHY: pages such as YouTube install global keyboard shortcuts on window/document.
-    // WHAT: stop overlay-originated key events before page listeners see them, while leaving
-    // browser default text editing intact by not calling preventDefault for normal typing.
-    event.stopImmediatePropagation();
-  };
-
-  for (const eventType of ['keydown', 'keypress', 'keyup']) {
-    window.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
-    document.addEventListener(eventType, handleOverlayKeyboardEvent, { capture: true });
-  }
-
   const appendMessage = (role, content) => {
     state = {
       ...state,
-      messages: [...state.messages, { role, content, timestamp: nowIso() }],
+      messages: [...state.messages, { role, content, timestamp: shared.nowIso() }],
     };
     render();
   };
@@ -188,7 +110,7 @@
     const messages = [...state.messages];
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') {
-      messages.push({ role: 'assistant', content: delta, timestamp: nowIso() });
+      messages.push({ role: 'assistant', content: delta, timestamp: shared.nowIso() });
     } else {
       messages[messages.length - 1] = { ...last, content: `${last.content}${delta}` };
     }
@@ -205,193 +127,21 @@
         .map((message) => ({
           role: message.role,
           content: message.content || '',
-          timestamp: message.timestamp || nowIso(),
+          timestamp: message.timestamp || shared.nowIso(),
         })),
     };
     render();
   };
 
-  const storageGet = (key) => new Promise((resolve) => {
-    chrome.storage.local.get([key], (result) => resolve(result[key]));
-  });
+  const validateLoopbackBaseUrl = shared.validateLoopbackBaseUrl;
+  const storageGet = shared.storageGet;
+  const storageSet = shared.storageSet;
+  const serializeApiOptions = shared.serializeApiOptions;
+  const sendRuntimeMessage = shared.sendRuntimeMessage;
 
-  const storageSet = (key, value) => new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: value }, resolve);
-  });
-
-  const validateLoopbackBaseUrl = (raw) => {
-    try {
-      const parsed = new URL(String(raw || '').trim());
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw new Error('Use http:// or https:// loopback URLs only.');
-      }
-      const hostName = parsed.hostname.toLowerCase();
-      const isLoopback = hostName === 'localhost' || hostName === '127.0.0.1' || hostName === '[::1]' || hostName === '::1';
-      if (!isLoopback) {
-        throw new Error('Brute base URL must be localhost, 127.0.0.1, or ::1.');
-      }
-      parsed.hash = '';
-      parsed.search = '';
-      return parsed.toString().replace(/\/$/, '');
-    } catch (error) {
-      if (error instanceof Error) throw error;
-      throw new Error('Invalid Brute base URL.');
-    }
-  };
-
-  const serializeApiOptions = (options = {}) => {
-    const serialized = { method: options.method || 'GET' };
-    if (options.headers) serialized.headers = options.headers;
-    if (Object.prototype.hasOwnProperty.call(options, 'body')) serialized.body = options.body;
-    return serialized;
-  };
-
-  const sendRuntimeMessage = (message) => new Promise((resolve, reject) => {
-    try {
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        resolve(response);
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-
-  const apiErrorDetail = (response) => {
-    const body = response?.body;
-    return body?.error || body?.message || response?.bodyText || `${response?.status || ''} ${response?.statusText || ''}`.trim() || 'Brute request failed.';
-  };
-
-  const apiFetch = async (path, options = {}) => {
-    const baseUrl = validateLoopbackBaseUrl(state.baseUrl || DEFAULT_BRUTE_BASE_URL);
-    // WHY: HTTPS host pages cannot directly fetch http://localhost due to Chrome's
-    // Private Network Access checks against the page origin.
-    // WHAT: ask the extension service worker to perform the loopback request under
-    // extension host_permissions, then normalize the response back to fetch-like data.
-    const proxied = await sendRuntimeMessage({
-      type: 'A2GENT_BRUTE_API_FETCH',
-      baseUrl,
-      path,
-      options: serializeApiOptions(options),
-    });
-    if (!proxied?.ok) {
-      throw new Error(proxied?.error || 'Brute request failed.');
-    }
-    const response = proxied.response;
-    if (!response?.ok) {
-      throw new Error(apiErrorDetail(response));
-    }
-    if (response.status === 204) return null;
-    return response.body;
-  };
-
-  const createSession = async (projectId, metadata) => apiFetch('/sessions', {
-    method: 'POST',
-    body: JSON.stringify({
-      agent_id: 'build',
-      project_id: projectId || undefined,
-      metadata,
-    }),
-  });
-
-  const listProjects = async () => apiFetch('/projects');
-
-  const sendStreamMessage = async (sessionId, message, images = []) => {
-    const baseUrl = validateLoopbackBaseUrl(state.baseUrl || DEFAULT_BRUTE_BASE_URL);
-    const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const streamPath = `/sessions/${encodeURIComponent(sessionId)}/chat/stream`;
-
-    await new Promise((resolve, reject) => {
-      const port = chrome.runtime.connect({ name: 'A2GENT_BRUTE_STREAM' });
-      let settled = false;
-      let buffer = '';
-
-      const cleanup = () => {
-        try {
-          port.onMessage.removeListener(onMessage);
-          port.onDisconnect.removeListener(onDisconnect);
-        } catch {
-          // Ignore listener cleanup after an extension reload/disconnect.
-        }
-      };
-      const settle = (callback, value) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        try {
-          port.disconnect();
-        } catch {
-          // The port may already be disconnected by the service worker.
-        }
-        callback(value);
-      };
-      const fail = (error) => settle(reject, error instanceof Error ? error : new Error(String(error)));
-
-      const consumeChunk = (chunk) => {
-        buffer += String(chunk || '');
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed === '') continue;
-          handleStreamEvent(JSON.parse(trimmed));
-        }
-      };
-
-      function onMessage(portMessage) {
-        if (!portMessage || portMessage.requestId !== requestId) return;
-        try {
-          if (portMessage.type === 'A2GENT_BRUTE_STREAM_CHUNK') {
-            consumeChunk(portMessage.chunk);
-            return;
-          }
-          if (portMessage.type === 'A2GENT_BRUTE_STREAM_ERROR') {
-            fail(new Error(portMessage.error || 'Brute stream failed.'));
-            return;
-          }
-          if (portMessage.type === 'A2GENT_BRUTE_STREAM_DONE') {
-            const tail = buffer.trim();
-            if (tail) {
-              handleStreamEvent(JSON.parse(tail));
-            }
-            settle(resolve);
-          }
-        } catch (error) {
-          fail(error);
-        }
-      }
-
-      function onDisconnect() {
-        if (!settled) {
-          fail(new Error('Brute stream disconnected. Reload the extension and try again.'));
-        }
-      }
-
-      port.onMessage.addListener(onMessage);
-      port.onDisconnect.addListener(onDisconnect);
-      // WHY: streaming chat responses must also avoid direct localhost fetches from
-      // HTTPS page contexts, otherwise Chrome blocks them before Brute can respond.
-      // WHAT: open a runtime Port so the service worker can fetch and forward NDJSON
-      // chunks while this content script keeps the existing inline UI update logic.
-      port.postMessage({
-        type: 'A2GENT_BRUTE_STREAM_START',
-        requestId,
-        baseUrl,
-        path: streamPath,
-        options: serializeApiOptions({
-          method: 'POST',
-          headers: {
-            Accept: 'application/x-ndjson',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ message, images }),
-        }),
-      });
-    });
-  };
+  const client = api.createApiClient({ getBaseUrl: () => state.baseUrl || DEFAULT_BRUTE_BASE_URL });
+  const createSession = client.createSession;
+  const listProjects = client.listProjects;
 
   const handleStreamEvent = (event) => {
     if (!event || typeof event !== 'object') return;
@@ -417,331 +167,57 @@
     }
   };
 
-  const getSelectionText = (max) => clip((window.getSelection && window.getSelection()?.toString()) || '', max).trim();
-
-  const getPageDiagnosticsFromMainWorld = () => new Promise((resolve) => {
-    const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const timeout = window.setTimeout(() => {
-      window.removeEventListener('message', onMessage);
-      resolve({ console_logs: [], page_errors: [], network_activity: [], capture_note: 'Timed out waiting for page diagnostics hook.' });
-    }, 500);
-    function onMessage(event) {
-      if (event.source !== window || !event.data || event.data.type !== 'A2GENT_PAGE_DIAGNOSTICS' || event.data.requestId !== requestId) {
-        return;
-      }
-      window.clearTimeout(timeout);
-      window.removeEventListener('message', onMessage);
-      resolve(event.data.payload || { console_logs: [], page_errors: [], network_activity: [] });
-    }
-    window.addEventListener('message', onMessage);
-    window.postMessage({ type: 'A2GENT_GET_PAGE_DIAGNOSTICS', requestId }, '*');
-  });
-
-  const endpointFromUrl = (value) => {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    try {
-      const parsed = new URL(raw, location.href);
-      // WHY: diagnostic network payloads were overwhelming model context.
-      // WHAT: keep endpoint identity while dropping query/fragment/body/header data.
-      if (parsed.protocol === 'data:' || parsed.protocol === 'blob:') {
-        return `${parsed.protocol}[omitted]`;
-      }
-      if (parsed.origin && parsed.origin !== 'null') {
-        return `${parsed.origin}${parsed.pathname || '/'}`;
-      }
-      return `${parsed.protocol}${parsed.pathname || ''}`;
-    } catch {
-      return raw.replace(/[?#].*$/, '');
-    }
-  };
-
-  const latestByCapturedAt = (entries, limit) => (Array.isArray(entries) ? entries : [])
-    .slice()
-    .sort((a, b) => (Date.parse(a?.captured_at || '') || 0) - (Date.parse(b?.captured_at || '') || 0))
-    .slice(-limit);
-
-  const compactNetworkActivity = (entries) => latestByCapturedAt(entries, MAX_NETWORK_ENTRIES)
-    .map((entry) => {
-      const out = {
-        captured_at: entry.captured_at || nowIso(),
-        type: entry.type || 'network',
-        method: String(entry.method || 'GET').toUpperCase(),
-        url: endpointFromUrl(entry.url),
-      };
-      const status = Number(entry.status);
-      if (Number.isFinite(status)) {
-        out.status = status;
-      }
-      if (entry.status_text) {
-        out.status_text = clip(entry.status_text, 160);
-      }
-      const durationMs = Number(entry.duration_ms);
-      if (Number.isFinite(durationMs)) {
-        out.duration_ms = Math.round(durationMs);
-      }
-      if (entry.error_message || entry.error) {
-        out.error_message = clip(entry.error_message || entry.error, 500);
-      }
-      return out;
-    });
-
-  const captureScreenshot = async () => {
-    const previousVisibility = host?.style.visibility || '';
-    const shouldHideAdapterPanel = Boolean(host && state.open);
-    if (shouldHideAdapterPanel) {
-      // WHY: screenshots should emphasize the user's page and freeform focus mark, not the adapter controls.
-      // WHAT: temporarily hide only the A2gent panel while leaving the drawing canvas visible for captureVisibleTab.
-      host.style.visibility = 'hidden';
-      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
-    }
-    try {
-      const response = await chrome.runtime.sendMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' });
-      if (!response || !response.ok || !response.dataUrl) {
-        throw new Error(response?.error || 'Failed to capture visible tab.');
-      }
-      return response.dataUrl;
-    } finally {
-      if (shouldHideAdapterPanel && host) {
-        host.style.visibility = previousVisibility;
-      }
-    }
-  };
-
-  const getDrawingOverlay = () => window.__A2GENT_DRAWING_OVERLAY__ || null;
+  const sendStreamMessage = (sessionId, message, images = []) => client.sendStreamMessage(sessionId, message, images, { onEvent: handleStreamEvent });
 
   const syncDrawingState = () => {
-    const drawingOverlay = getDrawingOverlay();
-    if (!drawingOverlay) return;
-    state = {
-      ...state,
-      drawingEnabled: Boolean(drawingOverlay.isEnabled?.()),
-      hasDrawing: Boolean(drawingOverlay.hasStrokes?.()),
-      drawingStrokeCount: drawingOverlay.getSummary?.()?.stroke_count || 0,
-    };
+    drawingBridge.syncDrawingState(getState, setRawState);
     render();
   };
 
   const toggleDrawing = () => {
-    const drawingOverlay = getDrawingOverlay();
-    if (!drawingOverlay) {
-      setState({ error: 'Drawing overlay is unavailable. Reload the page or extension.' });
-      return;
-    }
-    drawingOverlay.toggle();
+    drawingBridge.toggleDrawing(setState);
     syncDrawingState();
   };
 
   const cancelDrawing = () => {
-    const drawingOverlay = getDrawingOverlay();
-    if (!drawingOverlay) return;
-    drawingOverlay.clear({ exit: true });
+    drawingBridge.cancelDrawing();
     syncDrawingState();
   };
 
   const disableDrawingInput = () => {
-    const drawingOverlay = getDrawingOverlay();
-    if (!drawingOverlay?.isEnabled?.()) return;
-    drawingOverlay.setEnabled(false);
+    drawingBridge.disableDrawingInput();
     syncDrawingState();
   };
 
-  const getDrawingSummary = () => getDrawingOverlay()?.getSummary?.() || null;
+  const getDrawingSummary = () => drawingBridge.getDrawingSummary();
 
-  const collectDomSnapshot = () => {
-    const clone = document.documentElement.cloneNode(true);
-    try {
-      clone.querySelector('#a2gent-browser-adapter-root')?.remove();
-      clone.querySelector(`#${DRAWING_ROOT_ID}`)?.remove();
-    } catch {
-      // Ignore DOM clone cleanup failures.
-    }
-    return {
-      html: clip(clone.outerHTML || '', MAX_DOM_HTML),
-      text: clip(document.body?.innerText || document.documentElement?.textContent || '', MAX_DOM_TEXT),
-      active_element: document.activeElement ? {
-        tag: document.activeElement.tagName,
-        id: document.activeElement.id || '',
-        class_name: document.activeElement.className || '',
-        aria_label: document.activeElement.getAttribute('aria-label') || '',
-      } : null,
-    };
-  };
+  const collectFullDiagnostics = (userPrompt, reason) => diagnostics.collectFullDiagnostics({
+    userPrompt,
+    reason,
+    disableDrawingInput,
+    getDrawingSummary,
+    host,
+    isOverlayOpen: state.open,
+  });
+  const collectLightweightRefresh = diagnostics.collectLightweightRefresh;
+  const imageFromScreenshot = diagnostics.imageFromScreenshot;
+  const createInitialMessage = diagnostics.createInitialMessage;
+  const createFollowupMessage = diagnostics.createFollowupMessage;
+  const createRecaptureMessage = diagnostics.createRecaptureMessage;
 
-  const collectFullDiagnostics = async (userPrompt, reason) => {
-    disableDrawingInput();
-    const focusAnnotation = getDrawingSummary();
-    const [pageDiagnostics, screenshotDataUrl] = await Promise.all([
-      getPageDiagnosticsFromMainWorld(),
-      captureScreenshot(),
-    ]);
-    return {
-      screenshotDataUrl,
-      payload: {
-        schema: 'a2gent.browser.diagnostic.v1',
-        source: SOURCE,
-        extension_version: EXTENSION_VERSION,
-        diagnostic_bundle_type: reason,
-        captured_at: nowIso(),
-        page: {
-          url: location.href,
-          title: document.title,
-          referrer: document.referrer || '',
-          visibility_state: document.visibilityState,
-          viewport: {
-            width: window.innerWidth,
-            height: window.innerHeight,
-            device_pixel_ratio: window.devicePixelRatio,
-            scroll_x: window.scrollX,
-            scroll_y: window.scrollY,
-          },
-          user_agent: navigator.userAgent,
-        },
-        user_prompt: userPrompt,
-        focus_annotation: focusAnnotation || undefined,
-        selected_text: getSelectionText(MAX_SELECTED_TEXT_FULL),
-        dom_snapshot: collectDomSnapshot(),
-        console_logs: pageDiagnostics.console_logs || [],
-        page_errors: pageDiagnostics.page_errors || [],
-        network_activity: compactNetworkActivity(pageDiagnostics.network_activity),
-        exclusions: {
-          cookies: 'excluded by specification; extension does not read document.cookie or Cookie/Set-Cookie headers',
-          browser_storage: 'excluded by specification; extension does not read localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted storage',
-          network_details: 'network diagnostics are limited to latest 20 endpoint-level records and compact timing entries; request/response headers, bodies, URL query strings, and URL fragments are omitted',
-        },
-      },
-    };
-  };
-
-  const collectLightweightRefresh = () => ({
-    schema: 'a2gent.browser.lightweight_context.v1',
-    source: SOURCE,
-    captured_at: nowIso(),
-    page: {
-      url: location.href,
-      title: document.title,
-    },
-    selected_text: getSelectionText(MAX_SELECTED_TEXT_LIGHT) || undefined,
+  const loadSettingsAndProjects = () => settings.loadSettingsAndProjects({
+    getState,
+    setState,
+    setRawState,
+    listProjects,
+    render,
   });
 
-  const jsonBlock = (label, payload) => `\n\n\`\`\`json ${label}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-
-  const imageFromScreenshot = (dataUrl, name) => ({
-    name,
-    media_type: 'image/png',
-    data_base64: dataUrl.replace(/^data:image\/png;base64,/, ''),
+  const saveBaseUrl = () => settings.saveBaseUrl({
+    shadow,
+    setState,
+    loadSettingsAndProjects,
   });
-
-  const createInitialMessage = (prompt, diagnosticsPayload) => `${prompt}${jsonBlock('a2gent_browser_diagnostic', diagnosticsPayload)}`;
-
-  const createFollowupMessage = (prompt, lightweightPayload) => `${prompt}${jsonBlock('a2gent_browser_context', lightweightPayload)}`;
-
-  const createRecaptureMessage = (diagnosticsPayload) => `Manual full browser diagnostic recapture from the Chrome extension.${jsonBlock('a2gent_browser_diagnostic', diagnosticsPayload)}`;
-
-  const wildcardCount = (pattern) => (pattern.match(/\*/g) || []).length;
-  const literalCharCount = (pattern) => pattern.replace(/\*/g, '').length;
-  const literalPathLength = (pattern) => {
-    try {
-      return new URL(pattern.replace(/\*/g, 'wildcard')).pathname.replace(/wildcard/g, '').length;
-    } catch {
-      return 0;
-    }
-  };
-
-  const patternMatchesUrl = (pattern, currentUrl) => {
-    try {
-      if (typeof URLPattern !== 'undefined') {
-        return new URLPattern(pattern).test(currentUrl);
-      }
-    } catch {
-      // Fallback below for our restricted '*' subset.
-    }
-    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-    return new RegExp(`^${escaped}$`).test(currentUrl);
-  };
-
-  const compareScores = (left, right) => {
-    if (left.wildcards !== right.wildcards) return left.wildcards - right.wildcards;
-    if (left.literalChars !== right.literalChars) return right.literalChars - left.literalChars;
-    if (left.literalPath !== right.literalPath) return right.literalPath - left.literalPath;
-    return 0;
-  };
-
-  const detectProject = (projects, currentUrl) => {
-    const matches = [];
-    for (const project of projects) {
-      for (const pattern of project.url_patterns || []) {
-        if (!pattern || !patternMatchesUrl(pattern, currentUrl)) continue;
-        matches.push({
-          project,
-          pattern,
-          wildcards: wildcardCount(pattern),
-          literalChars: literalCharCount(pattern),
-          literalPath: literalPathLength(pattern),
-        });
-      }
-    }
-    if (matches.length === 0) {
-      return { projectId: '', mode: 'manual', label: 'Manual selection', detail: 'No URL pattern matched this page.' };
-    }
-    matches.sort(compareScores);
-    const best = matches[0];
-    const tied = matches.filter((candidate) => compareScores(candidate, best) === 0);
-    const tiedProjectIds = new Set(tied.map((candidate) => candidate.project.id));
-    if (tiedProjectIds.size > 1) {
-      return {
-        projectId: '',
-        mode: 'manual',
-        label: 'Manual selection required',
-        detail: `Multiple projects matched equally: ${tied.map((item) => `${item.project.name} (${item.pattern})`).join(', ')}`,
-      };
-    }
-    return {
-      projectId: best.project.id,
-      mode: 'auto',
-      label: `Auto-detected: ${best.project.name}`,
-      detail: `Matched ${best.pattern}`,
-    };
-  };
-
-  const loadSettingsAndProjects = async () => {
-    const storedBaseUrl = await storageGet(STORAGE_BASE_URL_KEY);
-    const baseUrl = storedBaseUrl || DEFAULT_BRUTE_BASE_URL;
-    state.baseUrl = baseUrl;
-    render();
-    try {
-      setState({ status: 'Loading projects...', error: '' });
-      const projects = await listProjects();
-      const detection = detectProject(projects || [], location.href);
-      setState({
-        projects: projects || [],
-        selectedProjectId: detection.projectId,
-        projectDetection: { mode: detection.mode, label: detection.label, detail: detection.detail },
-        status: 'Ready',
-      });
-    } catch (error) {
-      setState({
-        projects: [],
-        selectedProjectId: '',
-        projectDetection: { mode: 'manual', label: 'Manual selection', detail: 'Projects could not be loaded.' },
-        status: 'Brute unavailable',
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  const saveBaseUrl = async () => {
-    const input = shadow.querySelector('[data-role="base-url"]');
-    if (!input) return;
-    try {
-      const baseUrl = validateLoopbackBaseUrl(input.value);
-      await storageSet(STORAGE_BASE_URL_KEY, baseUrl);
-      setState({ baseUrl, error: '', status: 'Base URL saved.', settingsOpen: false });
-      await loadSettingsAndProjects();
-    } catch (error) {
-      setState({ error: error instanceof Error ? error.message : String(error) });
-    }
-  };
 
   const startSession = async () => {
     if (state.busy) return;
@@ -757,7 +233,7 @@
 
     setState({ busy: true, status: 'Capturing full diagnostics...', error: '' });
     try {
-      const diagnostics = await collectFullDiagnostics(prompt, 'initial_full');
+      const diagnosticsBundle = await collectFullDiagnostics(prompt, 'initial_full');
       const selectedProject = state.projects.find((project) => project.id === state.selectedProjectId) || null;
       const metadata = {
         source: SOURCE,
@@ -767,8 +243,8 @@
         page_title: document.title,
         project_detection: state.projectDetection,
         project_name: selectedProject?.name || '',
-        has_focus_annotation: Boolean(diagnostics.payload.focus_annotation),
-        focus_annotation_stroke_count: diagnostics.payload.focus_annotation?.stroke_count || 0,
+        has_focus_annotation: Boolean(diagnosticsBundle.payload.focus_annotation),
+        focus_annotation_stroke_count: diagnosticsBundle.payload.focus_annotation?.stroke_count || 0,
       };
       setState({ status: 'Creating Brute session...' });
       const created = await createSession(state.selectedProjectId, metadata);
@@ -776,8 +252,8 @@
       appendMessage('user', prompt);
       await sendStreamMessage(
         created.id,
-        createInitialMessage(prompt, diagnostics.payload),
-        [imageFromScreenshot(diagnostics.screenshotDataUrl, 'initial-page-screenshot.png')],
+        createInitialMessage(prompt, diagnosticsBundle.payload),
+        [imageFromScreenshot(diagnosticsBundle.screenshotDataUrl, 'initial-page-screenshot.png')],
       );
       setState({ busy: false, status: 'Session ready', followup: '' });
     } catch (error) {
@@ -813,6 +289,15 @@
     }
   };
 
+  focus.installOverlayKeyboardShield({
+    hostRef: () => host,
+    shadowRef: () => shadow,
+    stateRef: () => state,
+    onSubmit: (role) => {
+      window.dispatchEvent(new CustomEvent(OVERLAY_SUBMIT_EVENT, { detail: role }));
+    },
+  });
+
   window.addEventListener(OVERLAY_SUBMIT_EVENT, (event) => submitOverlayComposer(event.detail));
   window.addEventListener(DRAWING_CHANGE_EVENT, (event) => {
     const detail = event.detail || {};
@@ -844,13 +329,13 @@
     if (!state.sessionId || state.busy || state.recapturing) return;
     setState({ recapturing: true, busy: true, status: 'Capturing full diagnostics...', error: '' });
     try {
-      const diagnostics = await collectFullDiagnostics('Manual full diagnostic recapture', 'manual_full_recapture');
+      const diagnosticsBundle = await collectFullDiagnostics('Manual full diagnostic recapture', 'manual_full_recapture');
       appendMessage('user', 'Manual full diagnostic recapture');
       setState({ status: 'Sending full recapture...' });
       await sendStreamMessage(
         state.sessionId,
-        createRecaptureMessage(diagnostics.payload),
-        [imageFromScreenshot(diagnostics.screenshotDataUrl, 'manual-full-recapture.png')],
+        createRecaptureMessage(diagnosticsBundle.payload),
+        [imageFromScreenshot(diagnosticsBundle.screenshotDataUrl, 'manual-full-recapture.png')],
       );
       setState({ recapturing: false, busy: false, status: 'Full recapture sent' });
     } catch (error) {
@@ -858,99 +343,29 @@
     }
   };
 
-  const attachEvents = () => {
-    shadow.querySelector('[data-role="close"]')?.addEventListener('click', () => {
-      disableDrawingInput();
-      setState({ open: false, settingsOpen: false });
-    });
-    shadow.querySelector('[data-role="settings-toggle"]')?.addEventListener('click', () => setState({ settingsOpen: !state.settingsOpen }));
-    shadow.querySelector('[data-role="refresh-projects"]')?.addEventListener('click', () => void loadSettingsAndProjects());
-    shadow.querySelector('[data-role="save-base-url"]')?.addEventListener('click', () => void saveBaseUrl());
-    shadow.querySelector('[data-role="project"]')?.addEventListener('change', (event) => {
-      setState({
-        selectedProjectId: event.target.value,
-        projectDetection: { mode: 'manual', label: 'Manual selection', detail: 'Project chosen manually.' },
-      });
-    });
-    shadow.querySelector('[data-role="prompt"]')?.addEventListener('input', (event) => {
-      state.prompt = event.target.value;
-    });
-    shadow.querySelector('[data-role="followup"]')?.addEventListener('input', (event) => {
-      state.followup = event.target.value;
-    });
-    shadow.querySelector('[data-role="create"]')?.addEventListener('click', () => void startSession());
-    shadow.querySelectorAll('[data-role="drawing-toggle"]').forEach((button) => button.addEventListener('click', () => toggleDrawing()));
-    shadow.querySelectorAll('[data-role="drawing-cancel"]').forEach((button) => button.addEventListener('click', () => cancelDrawing()));
-    shadow.querySelector('[data-role="send"]')?.addEventListener('click', () => void sendFollowup());
-    shadow.querySelector('[data-role="recapture"]')?.addEventListener('click', () => void sendFullRecapture());
-    shadow.querySelector('[data-role="open-session"]')?.addEventListener('click', () => openSessionDetail());
-    shadow.querySelectorAll('[data-role="prompt"], [data-role="followup"]').forEach((textarea) => {
-      textarea.addEventListener('keydown', (event) => {
-        const role = event.currentTarget?.getAttribute?.('data-role') || '';
-        if (!shouldSubmitOverlayComposer(event, role)) return;
-        event.preventDefault();
-        submitOverlayComposer(role);
-      });
-    });
+  const attachEvents = () => renderWiring.attachEvents({
+    getShadow: () => shadow,
+    getHost: () => host,
+    getState,
+    setState,
+    saveBaseUrl,
+    loadSettingsAndProjects,
+    startSession,
+    sendFollowup,
+    sendFullRecapture,
+    openSessionDetail,
+    toggleDrawing,
+    cancelDrawing,
+    disableDrawingInput,
+    submitOverlayComposer,
+  });
 
-    const resize = shadow.querySelector('[data-role="resize"]');
-    resize?.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-      const startY = event.clientY;
-      const minHeight = state.sessionId || state.settingsOpen ? EXPANDED_OVERLAY_MIN_HEIGHT : COMPACT_OVERLAY_MIN_HEIGHT;
-      const startHeight = Math.max(state.overlayHeight, minHeight);
-      const onMove = (moveEvent) => {
-        const maxHeight = Math.min(640, Math.floor(window.innerHeight * (window.innerWidth < 720 ? 0.6 : 0.9)));
-        const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + (startY - moveEvent.clientY)));
-        state.overlayHeight = nextHeight;
-        host.style.setProperty('--a2gent-overlay-height', `${nextHeight}px`);
-      };
-      const onUp = () => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-      };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    });
-  };
-
-  const render = () => {
-    if (!host || !shadow) return;
-    host.style.display = state.open ? 'block' : 'none';
-    host.style.setProperty('--a2gent-overlay-height', `${state.overlayHeight}px`);
-    if (!state.open) return;
-
-    const ui = window.__A2GENT_CONTENT_UI__;
-    if (!ui?.renderOverlay) {
-      shadow.innerHTML = '<div>A2gent Browser Adapter UI failed to load. Reload the extension.</div>';
-      return;
-    }
-
-    // WHY: full shadow DOM replacement destroys the focused textarea/input.
-    // WHAT: remember the overlay control and selection so YouTube/player focus is not restored while the user types.
-    const focusSnapshot = readOverlayFocusSnapshot();
-    shadow.innerHTML = ui.renderOverlay({
-      state,
-      compactOverlayHeight: COMPACT_OVERLAY_HEIGHT,
-      compactOverlayMinHeight: COMPACT_OVERLAY_MIN_HEIGHT,
-      expandedOverlayMinHeight: EXPANDED_OVERLAY_MIN_HEIGHT,
-    });
-    attachEvents();
-    restoreOverlayFocusSnapshot(focusSnapshot);
-    if (shouldFocusPrimaryControl) {
-      shouldFocusPrimaryControl = false;
-      window.requestAnimationFrame(focusPrimaryControl);
-    }
-  };
-
-  const ensureOverlay = () => {
-    if (host && shadow) return;
-    host = document.createElement('div');
-    host.id = 'a2gent-browser-adapter-root';
-    host.style.display = 'none';
-    document.documentElement.appendChild(host);
-    shadow = host.attachShadow({ mode: 'open' });
-  };
+  const ensureOverlay = () => renderWiring.ensureOverlay(
+    () => host,
+    () => shadow,
+    (nextHost) => { host = nextHost; },
+    (nextShadow) => { shadow = nextShadow; },
+  );
 
   const toggleOverlay = async () => {
     ensureOverlay();

@@ -179,7 +179,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // WHY: content scripts may be unavailable on newly loaded tabs or after extension reloads.
     // WHAT: inject both the MAIN-world page hook and isolated overlay script before retrying the toggle message.
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/pageHook.js'], world: 'MAIN' });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/drawingAnnotation.js', 'src/contentDrawing.js', 'src/contentUi.js', 'src/contentScript.js', 'src/browserControlBridge.js'] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/drawingAnnotation.js', 'src/contentDrawing.js', 'src/contentUi.js', 'src/contentScript/shared.js', 'src/contentScript/projectMatching.js', 'src/contentScript/diagnosticsHelpers.js', 'src/contentScript/overlayFocus.js', 'src/contentScript/drawingBridge.js', 'src/contentScript/caesarApi.js', 'src/contentScript/pageDiagnostics.js', 'src/contentScript/projectSettings.js', 'src/contentScript/renderWiring.js', 'src/contentScript.js', 'src/browserControlBridge.js'] });
     await chrome.tabs.sendMessage(tab.id, { type: 'A2GENT_TOGGLE_OVERLAY' });
   }
 });
