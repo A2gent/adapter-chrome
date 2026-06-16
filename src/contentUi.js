@@ -7,7 +7,7 @@
     .replace(/'/g, '&#039;');
 
   const renderDrawingHeaderActions = (state) => {
-    if (!state.drawingEnabled && !state.hasDrawing) return '';
+    const drawLabel = state.drawingEnabled ? 'Done drawing' : (state.hasDrawing ? 'Add more focus' : 'Draw focus');
     return `
       <button
         type="button"
@@ -15,30 +15,10 @@
         class="ghost ${state.drawingEnabled ? 'active-drawing' : ''}"
         aria-pressed="${state.drawingEnabled ? 'true' : 'false'}"
         ${state.busy ? 'disabled' : ''}
-      >${state.drawingEnabled ? 'Done drawing' : 'Add focus'}</button>
-      <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
-    `;
-  };
-
-  const renderDrawingControls = (state) => {
-    const drawLabel = state.drawingEnabled ? 'Done drawing' : (state.hasDrawing ? 'Add more focus' : 'Draw focus');
-    const hint = state.drawingEnabled
-      ? 'Drag on the page area above this panel. The red curve will be included in the next screenshot.'
-      : (state.hasDrawing ? `${state.drawingStrokeCount || 1} focus stroke${state.drawingStrokeCount === 1 ? '' : 's'} ready for the next screenshot.` : 'Optional: mark the important page area before creating or recapturing.');
-    return `
-      <section class="drawing-tools" aria-label="Screenshot focus drawing tools">
-        <button
-          type="button"
-          data-role="drawing-toggle"
-          class="secondary ${state.drawingEnabled ? 'active' : ''}"
-          aria-pressed="${state.drawingEnabled ? 'true' : 'false'}"
-          ${state.busy ? 'disabled' : ''}
-        >${drawLabel}</button>
-        ${(state.drawingEnabled || state.hasDrawing) ? `
-          <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
-        ` : ''}
-        <span>${escapeHtml(hint)}</span>
-      </section>
+      >${drawLabel}</button>
+      ${(state.drawingEnabled || state.hasDrawing) ? `
+        <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
+      ` : ''}
     `;
   };
 
@@ -59,12 +39,10 @@
         </svg>
       </button>
     </section>
-    ${renderDrawingControls(state)}
   `;
 
   const renderContinuation = (state, messages) => `
     <section class="messages">${messages}</section>
-    ${renderDrawingControls(state)}
     <section class="followup-row">
       <textarea data-role="followup" placeholder="Follow up. Enter to send, Shift+Enter for newline.">${escapeHtml(state.followup)}</textarea>
       <div class="actions continuation-actions">
@@ -208,15 +186,6 @@
     .send-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.20); }
     .send-button:focus-visible { box-shadow: 0 0 0 2px rgba(102, 95, 255, 0.72); }
     .send-icon { width: 30px; height: 30px; transform: translateX(1px); }
-    .drawing-tools {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      color: #9fb1c7;
-      font-size: 12px;
-    }
-    .drawing-tools span { min-width: 180px; }
     .visually-hidden {
       position: absolute;
       width: 1px;
