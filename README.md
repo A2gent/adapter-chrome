@@ -1,6 +1,13 @@
-# A2gent Brute Chrome Adapter
-
+# A2gent Brute Chrome extension
 This repository contains an unpacked Chrome MV3 extension for creating and continuing local Brute sessions from the current browser page.
+
+Features:
+- automatic screenshot capturing, page URL and html inclusion for the context
+- drawing capability
+- URL-based automatic project selection to correctly select which domain area it falls into
+
+<img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
+<img width="1161" height="875" alt="Screenshot 2026-06-10 at 01 05 09" src="https://github.com/user-attachments/assets/3fbceca0-acd0-4f9b-9849-9abb7d4d5cba" />
 
 ## Setup
 
