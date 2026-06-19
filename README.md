@@ -7,7 +7,7 @@ Features:
 - URL-based automatic project selection to correctly select which domain area it falls into
 
 <img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
-<img width="1161" height="875" alt="Screenshot 2026-06-10 at 01 05 09" src="https://github.com/user-attachments/assets/3fbceca0-acd0-4f9b-9849-9abb7d4d5cba" />
+<img width="1598" height="800" alt="Screenshot 2026-06-20 at 00 59 42" src="https://github.com/user-attachments/assets/7bf47a1e-dbb3-4fef-a0c1-eb4e3ef96e9a" />
 
 ## Setup
 
