@@ -118,9 +118,22 @@ test('apiFetch proxies JSON API calls through the runtime and normalizes respons
   assert.deepEqual(messages[1].options, { method: 'GET' });
 });
 
-test('createSession omits empty project IDs and listProjects uses the projects endpoint', async (t) => {
+test('createSession uses the active provider and listProjects uses the projects endpoint', async (t) => {
   const { runtime, messages } = createRuntimeMock({
     sendResponse(message) {
+      if (message.path === '/providers') {
+        return {
+          ok: true,
+          response: {
+            ok: true,
+            status: 200,
+            body: [
+              { type: 'automatic_router', is_active: false },
+              { type: 'openai_codex', is_active: true },
+            ],
+          },
+        };
+      }
       if (message.path === '/sessions') {
         return { ok: true, response: { ok: true, status: 200, body: { id: 'session-1' } } };
       }
@@ -134,13 +147,39 @@ test('createSession omits empty project IDs and listProjects uses the projects e
   assert.deepEqual(await client.createSession('', { source: 'adapter-chrome' }), { id: 'session-1' });
   assert.deepEqual(await client.listProjects(), [{ id: 'project-1' }]);
 
-  assert.equal(messages[0].path, '/sessions');
-  assert.equal(messages[0].options.method, 'POST');
-  assert.deepEqual(JSON.parse(messages[0].options.body), {
+  assert.equal(messages[0].path, '/providers');
+  assert.equal(messages[1].path, '/sessions');
+  assert.equal(messages[1].options.method, 'POST');
+  assert.deepEqual(JSON.parse(messages[1].options.body), {
     agent_id: 'build',
+    provider: 'openai_codex',
     metadata: { source: 'adapter-chrome' },
   });
-  assert.equal(messages[1].path, '/projects');
+  assert.equal(messages[2].path, '/projects');
+});
+
+test('createSession falls back to server-side provider resolution when providers cannot be loaded', async (t) => {
+  const { runtime, messages } = createRuntimeMock({
+    sendResponse(message) {
+      if (message.path === '/providers') {
+        return { ok: true, response: { ok: false, status: 500, statusText: 'Internal Server Error', body: { message: 'provider settings unavailable' } } };
+      }
+      return { ok: true, response: { ok: true, status: 200, body: { id: 'session-1' } } };
+    },
+  });
+  withChrome(t, { runtime });
+
+  const client = caesarApi.createApiClient({ getBaseUrl: () => 'http://127.0.0.1:5445/' });
+
+  assert.deepEqual(await client.createSession('project-1', { source: 'adapter-chrome' }), { id: 'session-1' });
+
+  assert.equal(messages[0].path, '/providers');
+  assert.equal(messages[1].path, '/sessions');
+  assert.deepEqual(JSON.parse(messages[1].options.body), {
+    agent_id: 'build',
+    project_id: 'project-1',
+    metadata: { source: 'adapter-chrome' },
+  });
 });
 
 test('apiFetch reports runtime proxy and Brute HTTP failures', async (t) => {

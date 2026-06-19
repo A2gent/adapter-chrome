@@ -37,16 +37,32 @@
       return response.body;
     };
 
-    const createSession = async (projectId, metadata) => apiFetch('/sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        agent_id: 'build',
-        project_id: projectId || undefined,
-        metadata,
-      }),
-    });
+    const activeProviderType = async () => {
+      try {
+        const providers = await listProviders();
+        if (!Array.isArray(providers)) return '';
+        const activeProvider = providers.find((provider) => provider?.is_active === true);
+        return typeof activeProvider?.type === 'string' ? activeProvider.type.trim() : '';
+      } catch {
+        return '';
+      }
+    };
+
+    const createSession = async (projectId, metadata) => {
+      const provider = await activeProviderType();
+      return apiFetch('/sessions', {
+        method: 'POST',
+        body: JSON.stringify({
+          agent_id: 'build',
+          project_id: projectId || undefined,
+          provider: provider || undefined,
+          metadata,
+        }),
+      });
+    };
 
     const listProjects = async () => apiFetch('/projects');
+    const listProviders = async () => apiFetch('/providers');
 
     const sendStreamMessage = async (sessionId, message, images = [], handlers = {}) => {
       const baseUrl = shared.validateLoopbackBaseUrl(await getBaseUrl());
@@ -146,6 +162,7 @@
     return {
       apiFetch,
       createSession,
+      listProviders,
       listProjects,
       sendStreamMessage,
     };
