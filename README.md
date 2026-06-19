@@ -6,7 +6,6 @@ Features:
 - numbered arrow and region annotation capability
 - URL-based automatic project selection to correctly select which domain area it falls into
 
-<img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
 <img width="1598" height="800" alt="Screenshot 2026-06-20 at 00 59 42" src="https://github.com/user-attachments/assets/7bf47a1e-dbb3-4fef-a0c1-eb4e3ef96e9a" />
 
 ## Setup
@@ -23,6 +22,9 @@ Features:
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select this `adapter-chrome` directory.
 5. Navigate to any `http://` or `https://` page and click the extension icon. The in-page bottom overlay toggles open/closed.
+
+<img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
+
 
 The extension defaults to `http://localhost:5445`. Connection and project-context controls are hidden during the normal diagnosis flow; click **Settings** in the overlay when you need to override the local endpoint, refresh projects, or change the selected project. The endpoint remains loopback-only: `localhost`, `127.0.0.1`, or `::1` over HTTP/HTTPS. No authentication is used; this is intentionally a local-machine trust model.
 
