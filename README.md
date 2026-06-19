@@ -3,7 +3,7 @@ This repository contains an unpacked Chrome MV3 extension for creating and conti
 
 Features:
 - automatic screenshot capturing, page URL and html inclusion for the context
-- drawing capability
+- numbered arrow and region annotation capability
 - URL-based automatic project selection to correctly select which domain area it falls into
 
 <img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
@@ -59,7 +59,7 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Current page URL and title.
 - User prompt text.
 - Current selected text when present.
-- Visible-page screenshot as an image attachment. If the user uses **Draw focus** first, the screenshot includes the freeform red focus curve and the JSON bundle includes only compact `focus_annotation` counters, not stroke coordinates.
+- Visible-page screenshot as an image attachment. If the user uses **Annotate** first, the screenshot includes numbered arrow/region markers only; annotation note text is copied into the prompt as `N: text` references and compact `focus_annotation` JSON references, not rendered over the page.
 - DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
 - Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
@@ -84,4 +84,4 @@ After the initial session is created, the overlay stays in an inline continuatio
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
 - The **Open Session** button opens the created session in Caesar's browser session detail view.
 - The **Full recapture & send** button explicitly sends a fresh full diagnostic bundle and screenshot from the continuation buttons row.
-- The **Draw focus** button is available before initial creation and before full recapture. It lets the user drag freeform curves over the page area; marks are anchored to document coordinates so they scroll with the content, remain visible for the next screenshot, and **Cancel drawing** clears all drawn focus marks.
+- The **Annotate** button is available before initial creation and before full recapture. It lets the user place numbered arrows or regions anchored to document coordinates. Only the number is shown on screenshots; note text appears in a user-only hover/editor popup and is mirrored into the composer as lines such as `1: resize this button`. **Clear annotations** removes all marks.

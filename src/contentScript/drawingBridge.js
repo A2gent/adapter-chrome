@@ -9,21 +9,24 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, () => {
   const getDrawingOverlay = () => window.__A2GENT_DRAWING_OVERLAY__ || null;
 
+  const annotationCountFromSummary = (summary) => Number(summary?.annotation_count ?? summary?.stroke_count) || 0;
+
   const syncDrawingState = (getState, setRawState) => {
     const drawingOverlay = getDrawingOverlay();
     if (!drawingOverlay) return;
+    const summary = drawingOverlay.getSummary?.();
     setRawState({
       ...getState(),
       drawingEnabled: Boolean(drawingOverlay.isEnabled?.()),
-      hasDrawing: Boolean(drawingOverlay.hasStrokes?.()),
-      drawingStrokeCount: drawingOverlay.getSummary?.()?.stroke_count || 0,
+      hasDrawing: Boolean(drawingOverlay.hasAnnotations?.() ?? drawingOverlay.hasStrokes?.()),
+      drawingStrokeCount: annotationCountFromSummary(summary),
     });
   };
 
   const toggleDrawing = (setState) => {
     const drawingOverlay = getDrawingOverlay();
     if (!drawingOverlay) {
-      setState({ error: 'Drawing overlay is unavailable. Reload the page or extension.' });
+      setState({ error: 'Annotation overlay is unavailable. Reload the page or extension.' });
       return;
     }
     drawingOverlay.toggle();
@@ -37,7 +40,7 @@
 
   const disableDrawingInput = () => {
     const drawingOverlay = getDrawingOverlay();
-    if (!drawingOverlay?.isEnabled?.()) return;
+    if (!drawingOverlay) return;
     drawingOverlay.setEnabled(false);
   };
 

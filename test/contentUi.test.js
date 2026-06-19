@@ -22,7 +22,7 @@ const baseState = (overrides = {}) => ({
   ...overrides,
 });
 
-test('draw focus action renders in header before settings', () => {
+test('annotation action renders in header before settings', () => {
   const html = renderOverlay({
     state: baseState(),
     compactOverlayHeight: 160,
@@ -48,8 +48,8 @@ test('drawing header reflects active drawing state and disables cancellation whi
     expandedOverlayMinHeight: 360,
   });
 
-  assert.match(html, /data-role="drawing-toggle"[\s\S]*class="ghost active-drawing"[\s\S]*aria-pressed="true"[\s\S]*disabled[\s\S]*>Done drawing<\/button>/);
-  assert.match(html, /data-role="drawing-cancel"[\s\S]*disabled>Cancel drawing<\/button>/);
+  assert.match(html, /data-role="drawing-toggle"[\s\S]*class="ghost active-drawing"[\s\S]*aria-pressed="true"[\s\S]*disabled[\s\S]*>Done annotating<\/button>/);
+  assert.match(html, /data-role="drawing-cancel"[\s\S]*disabled>Clear annotations<\/button>/);
 });
 
 test('settings panel renders escaped project controls when explicitly opened', () => {

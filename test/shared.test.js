@@ -114,3 +114,24 @@ test('sendRuntimeMessage resolves responses and rejects Chrome runtime failures'
     /extension context invalidated/,
   );
 });
+
+test('annotation reference lines can be inserted and updated in composer text', () => {
+  const prompt = 'Please fix this page.\n\n1: old copy\n3: keep this card';
+
+  assert.equal(
+    shared.upsertAnnotationReferenceText(prompt, { number: 1, text: 'resize this button' }),
+    'Please fix this page.\n\n1: resize this button\n3: keep this card',
+  );
+  assert.equal(
+    shared.upsertAnnotationReferenceText(prompt, { number: 2, text: 'align icon' }),
+    'Please fix this page.\n\n1: old copy\n3: keep this card\n2: align icon',
+  );
+  assert.equal(
+    shared.upsertAnnotationReferenceText('', { number: 1, text: 'resize this button' }),
+    '1: resize this button',
+  );
+  assert.equal(
+    shared.upsertAnnotationReferenceText('Describe issue', { number: 1, text: '   ' }),
+    'Describe issue',
+  );
+});

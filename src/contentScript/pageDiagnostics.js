@@ -36,8 +36,8 @@
     const previousVisibility = host?.style.visibility || '';
     const shouldHideAdapterPanel = Boolean(host && isOverlayOpen);
     if (shouldHideAdapterPanel) {
-      // WHY: screenshots should emphasize the user's page and freeform focus mark, not the adapter controls.
-      // WHAT: temporarily hide only the A2gent panel while leaving the drawing canvas visible for captureVisibleTab.
+      // WHY: screenshots should emphasize the user's page and numbered annotations, not the adapter controls.
+      // WHAT: temporarily hide only the A2gent panel while leaving annotation markers visible for captureVisibleTab.
       host.style.visibility = 'hidden';
       await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
     }

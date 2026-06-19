@@ -87,6 +87,25 @@
     }
   });
 
+  const upsertAnnotationReferenceText = (currentText, reference) => {
+    const number = Math.max(1, Math.round(Number(reference?.number) || 0));
+    const text = String(reference?.text || '').trim();
+    if (!number || !text) return String(currentText || '');
+
+    const referenceLine = `${number}: ${text}`;
+    const lines = String(currentText || '').split('\n');
+    const linePattern = new RegExp(`^\\s*${number}\\s*:`);
+    const existingIndex = lines.findIndex((line) => linePattern.test(line));
+    if (existingIndex >= 0) {
+      lines[existingIndex] = referenceLine;
+      return lines.join('\n');
+    }
+
+    const prefix = String(currentText || '').trimEnd();
+    if (!prefix) return referenceLine;
+    return `${prefix}\n${referenceLine}`;
+  };
+
   return {
     DEFAULT_BRUTE_BASE_URL,
     DEFAULT_CAESAR_BASE_URL,
@@ -112,5 +131,6 @@
     validateLoopbackBaseUrl,
     serializeApiOptions,
     sendRuntimeMessage,
+    upsertAnnotationReferenceText,
   };
 });

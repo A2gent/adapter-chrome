@@ -60,9 +60,9 @@
     recapturing: false,
     drawingEnabled: false,
     hasDrawing: false,
+    annotationCount: 0,
     drawingStrokeCount: 0,
     sessionId: '',
-    messages: [],
     overlayHeight: COMPACT_OVERLAY_HEIGHT,
     settingsOpen: false,
   };
@@ -191,6 +191,20 @@
 
   const getDrawingSummary = () => drawingBridge.getDrawingSummary();
 
+  const annotationReferenceComposerRole = () => (state.sessionId ? 'followup' : 'prompt');
+
+  const syncAnnotationReferenceText = (reference) => {
+    if (!reference || !reference.number) return;
+    const role = annotationReferenceComposerRole();
+    const nextText = shared.upsertAnnotationReferenceText(state[role], reference);
+    if (nextText === state[role]) return;
+
+    state = { ...state, [role]: nextText };
+    // WHY: annotation text is typed in the floating annotation editor.
+    // WHAT: update the composer value without moving focus away from that editor.
+    render();
+  };
+
   const collectFullDiagnostics = (userPrompt, reason) => diagnostics.collectFullDiagnostics({
     userPrompt,
     reason,
@@ -244,9 +258,8 @@
         project_detection: state.projectDetection,
         project_name: selectedProject?.name || '',
         has_focus_annotation: Boolean(diagnosticsBundle.payload.focus_annotation),
-        focus_annotation_stroke_count: diagnosticsBundle.payload.focus_annotation?.stroke_count || 0,
+        focus_annotation_count: diagnosticsBundle.payload.focus_annotation?.annotation_count || diagnosticsBundle.payload.focus_annotation?.stroke_count || 0,
       };
-      setState({ status: 'Creating Brute session...' });
       const created = await createSession(state.selectedProjectId, metadata);
       setState({ sessionId: created.id, status: 'Sending diagnostics to agent...' });
       appendMessage('user', prompt);
@@ -298,13 +311,16 @@
     },
   });
 
-  window.addEventListener(OVERLAY_SUBMIT_EVENT, (event) => submitOverlayComposer(event.detail));
   window.addEventListener(DRAWING_CHANGE_EVENT, (event) => {
     const detail = event.detail || {};
+    if (detail.updatedReference) {
+      syncAnnotationReferenceText(detail.updatedReference);
+    }
     setState({
       drawingEnabled: Boolean(detail.enabled),
-      hasDrawing: Boolean(detail.hasStrokes),
-      drawingStrokeCount: Number(detail.strokeCount) || 0,
+      hasDrawing: Boolean(detail.hasAnnotations ?? detail.hasStrokes),
+      annotationCount: Number(detail.annotationCount ?? detail.strokeCount) || 0,
+      drawingStrokeCount: Number(detail.annotationCount ?? detail.strokeCount) || 0,
     });
   });
 

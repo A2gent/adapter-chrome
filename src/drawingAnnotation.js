@@ -8,8 +8,13 @@
 
   const positiveInt = (value, fallback = 1) => Math.max(1, Math.round(numeric(value, fallback)));
 
+  const positiveAnnotationNumber = (value) => {
+    const number = Math.round(numeric(value, NaN));
+    return Number.isFinite(number) && number > 0 ? number : null;
+  };
+
   const coordinateBounds = (viewport) => ({
-    // WHY: focus strokes are now stored in page coordinates so they can scroll with content.
+    // WHY: annotations are stored in page coordinates so they can scroll with content.
     // WHAT: prefer full page bounds when provided, while keeping the old viewport-only API working.
     width: positiveInt(viewport?.pageWidth ?? viewport?.documentWidth ?? viewport?.width, 1),
     height: positiveInt(viewport?.pageHeight ?? viewport?.documentHeight ?? viewport?.height, 1),
@@ -40,6 +45,57 @@
     return points.length < 2 ? null : points;
   };
 
+  const annotationType = (value) => {
+    const type = String(value || '').toLowerCase();
+    return type === 'arrow' || type === 'region' ? type : '';
+  };
+
+  const annotationText = (value) => String(value || '').trim().slice(0, 500);
+
+  const distance = (left, right) => Math.hypot(left.x - right.x, left.y - right.y);
+
+  const createAnnotation = (rawAnnotation, viewport) => {
+    if (!rawAnnotation || typeof rawAnnotation !== 'object') return null;
+    const type = annotationType(rawAnnotation.type);
+    const number = positiveAnnotationNumber(rawAnnotation.number);
+    if (!type || !number) return null;
+
+    const bounds = coordinateBounds(viewport);
+    const rawGeometry = rawAnnotation.geometry || {};
+    const text = annotationText(rawAnnotation.text);
+
+    if (type === 'arrow') {
+      const start = toPoint(rawAnnotation.start || rawGeometry.start, bounds);
+      const end = toPoint(rawAnnotation.end || rawGeometry.end, bounds);
+      if (distance(start, end) < 8) return null;
+      return {
+        number,
+        type,
+        text,
+        geometry: { start, end },
+      };
+    }
+
+    const hasBoxGeometry = ['x', 'y', 'width', 'height'].every((key) => Object.prototype.hasOwnProperty.call(rawGeometry, key));
+    const first = hasBoxGeometry
+      ? toPoint(rawGeometry, bounds)
+      : toPoint(rawAnnotation.start || rawGeometry.start, bounds);
+    const second = hasBoxGeometry
+      ? toPoint({ x: numeric(rawGeometry.x) + numeric(rawGeometry.width), y: numeric(rawGeometry.y) + numeric(rawGeometry.height) }, bounds)
+      : toPoint(rawAnnotation.end || rawGeometry.end, bounds);
+    const x = Math.min(first.x, second.x);
+    const y = Math.min(first.y, second.y);
+    const width = Math.abs(second.x - first.x);
+    const height = Math.abs(second.y - first.y);
+    if (width < 6 || height < 6) return null;
+    return {
+      number,
+      type,
+      text,
+      geometry: { x, y, width, height },
+    };
+  };
+
   const summarizeDrawing = (strokes, viewport) => {
     const normalizedStrokes = (Array.isArray(strokes) ? strokes : [])
       .map((stroke) => createStroke(stroke, viewport))
@@ -56,9 +112,31 @@
     };
   };
 
+  const summarizeAnnotations = (annotations, viewport) => {
+    const normalizedAnnotations = (Array.isArray(annotations) ? annotations : [])
+      .map((annotation) => createAnnotation(annotation, viewport))
+      .filter(Boolean);
+
+    return {
+      schema: 'a2gent.browser.annotation.v2',
+      type: 'numbered_references',
+      viewport: viewportMetadata(viewport),
+      // WHY: the screenshot shows the geometry and marker numbers.
+      // WHAT: prompts get compact numbered references without duplicating coordinates.
+      annotation_count: normalizedAnnotations.length,
+      references: normalizedAnnotations.map((annotation) => ({
+        number: annotation.number,
+        type: annotation.type,
+        text: annotation.text,
+      })),
+    };
+  };
+
   const api = {
     createStroke,
+    createAnnotation,
     summarizeDrawing,
+    summarizeAnnotations,
   };
 
   if (root && typeof root === 'object') {

@@ -7,7 +7,7 @@
     .replace(/'/g, '&#039;');
 
   const renderDrawingHeaderActions = (state) => {
-    const drawLabel = state.drawingEnabled ? 'Done drawing' : (state.hasDrawing ? 'Add more focus' : 'Draw focus');
+    const drawLabel = state.drawingEnabled ? 'Done annotating' : (state.hasDrawing ? 'Add annotation' : 'Annotate');
     return `
       <button
         type="button"
@@ -17,7 +17,7 @@
         ${state.busy ? 'disabled' : ''}
       >${drawLabel}</button>
       ${(state.drawingEnabled || state.hasDrawing) ? `
-        <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Cancel drawing</button>
+        <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Clear annotations</button>
       ` : ''}
     `;
   };
