@@ -54,6 +54,7 @@
     projectDetection: { mode: 'manual', label: 'Manual selection', detail: '' },
     prompt: '',
     followup: '',
+    messages: [],
     status: 'Idle',
     error: '',
     busy: false,
@@ -101,13 +102,13 @@
   const appendMessage = (role, content) => {
     state = {
       ...state,
-      messages: [...state.messages, { role, content, timestamp: shared.nowIso() }],
+      messages: [...shared.normalizeMessages(state.messages), { role, content, timestamp: shared.nowIso() }],
     };
     render();
   };
 
   const updateLastAssistant = (delta) => {
-    const messages = [...state.messages];
+    const messages = shared.normalizeMessages(state.messages);
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') {
       messages.push({ role: 'assistant', content: delta, timestamp: shared.nowIso() });
@@ -119,16 +120,9 @@
   };
 
   const setMessagesFromServer = (messages) => {
-    if (!Array.isArray(messages)) return;
     state = {
       ...state,
-      messages: messages
-        .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
-        .map((message) => ({
-          role: message.role,
-          content: message.content || '',
-          timestamp: message.timestamp || shared.nowIso(),
-        })),
+      messages: shared.normalizeMessages(messages),
     };
     render();
   };

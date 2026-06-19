@@ -106,6 +106,17 @@
     return `${prefix}\n${referenceLine}`;
   };
 
+  // WHY: message history can be absent during the first annotated-session submit
+  // or malformed from a stream event; spreading non-arrays breaks submission.
+  // WHAT: normalize to the small role/content/timestamp shape used by the overlay.
+  const normalizeMessages = (messages) => (Array.isArray(messages) ? messages : [])
+    .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
+    .map((message) => ({
+      role: message.role,
+      content: message.content || '',
+      timestamp: message.timestamp || nowIso(),
+    }));
+
   return {
     DEFAULT_BRUTE_BASE_URL,
     DEFAULT_CAESAR_BASE_URL,
@@ -132,5 +143,6 @@
     serializeApiOptions,
     sendRuntimeMessage,
     upsertAnnotationReferenceText,
+    normalizeMessages,
   };
 });

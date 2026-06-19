@@ -135,3 +135,25 @@ test('annotation reference lines can be inserted and updated in composer text', 
     'Describe issue',
   );
 });
+
+test('normalizeMessages tolerates missing or malformed message history before submit', () => {
+  assert.deepEqual(shared.normalizeMessages(undefined), []);
+  assert.deepEqual(shared.normalizeMessages({ role: 'user', content: 'not an array' }), []);
+
+  const normalized = shared.normalizeMessages([
+    null,
+    { role: 'system', content: 'ignored' },
+    { role: 'user', content: 'Use annotation 1', timestamp: '2026-06-19T00:00:00.000Z' },
+    { role: 'assistant', content: 42 },
+  ]);
+
+  assert.equal(normalized.length, 2);
+  assert.deepEqual(normalized[0], {
+    role: 'user',
+    content: 'Use annotation 1',
+    timestamp: '2026-06-19T00:00:00.000Z',
+  });
+  assert.equal(normalized[1].role, 'assistant');
+  assert.equal(normalized[1].content, 42);
+  assert.match(normalized[1].timestamp, /^\d{4}-\d{2}-\d{2}T/);
+});

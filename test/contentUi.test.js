@@ -102,3 +102,17 @@ test('existing session view renders escaped inline messages and follow-up action
   assert.match(html, /data-role="send"[\s\S]*disabled>Send<\/button>/);
   assert.doesNotMatch(html, /<button>broken|<details>/);
 });
+
+test('existing session view treats malformed message history as empty', () => {
+  const html = renderOverlay({
+    state: baseState({
+      messages: { role: 'user', content: 'not iterable' },
+      sessionId: 'session-1',
+    }),
+    compactOverlayHeight: 160,
+    compactOverlayMinHeight: 120,
+    expandedOverlayMinHeight: 360,
+  });
+
+  assert.match(html, /No inline messages yet\. Create a session to start\./);
+});

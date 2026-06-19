@@ -280,7 +280,7 @@
     const projectOptions = state.projects.map((project) => (
       `<option value="${escapeHtml(project.id)}" ${project.id === state.selectedProjectId ? 'selected' : ''}>${escapeHtml(project.name)}</option>`
     )).join('');
-    const messages = renderMessages(state.messages || []);
+    const messages = renderMessages(Array.isArray(state.messages) ? state.messages : []);
     const settingsPanel = renderSettingsPanel(state, selectedProject, projectOptions);
 
     return `
