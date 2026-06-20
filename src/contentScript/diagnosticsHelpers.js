@@ -13,6 +13,60 @@
     .sort((a, b) => (Date.parse(a?.captured_at || '') || 0) - (Date.parse(b?.captured_at || '') || 0))
     .slice(-(Number(limit) || shared.MAX_NETWORK_ENTRIES));
 
+  const collapseConsecutiveDuplicates = (entries, keyForEntry) => {
+    const collapsed = [];
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      const key = keyForEntry(entry);
+      const previous = collapsed[collapsed.length - 1];
+      if (previous && previous.__dedupe_key === key) {
+        previous.repeat_count = (previous.repeat_count || 1) + 1;
+        continue;
+      }
+      collapsed.push({ ...entry, __dedupe_key: key });
+    }
+    return collapsed.map(({ __dedupe_key: _key, ...entry }) => entry);
+  };
+
+  const normalizedComparableText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+  const isPromptEcho = (value, userPrompt) => {
+    const text = normalizedComparableText(value);
+    const prompt = normalizedComparableText(userPrompt);
+    if (text.length < 24 || prompt.length < 24) return false;
+    return prompt.includes(text) || text.includes(prompt);
+  };
+
+  const redactPromptEcho = (value, userPrompt, replacement = '[user prompt echo omitted]') => (
+    isPromptEcho(value, userPrompt) ? replacement : value
+  );
+
+  const redactPromptOccurrences = (value, userPrompt, replacement = '[user prompt omitted]') => {
+    const text = String(value || '');
+    const prompt = String(userPrompt || '').trim();
+    if (prompt.length < 24 || !text.includes(prompt)) return text;
+    return text.split(prompt).join(replacement);
+  };
+
+  const compactConsoleActivity = (entries, maxEntries = 20, userPrompt = '', now = shared.nowIso) => {
+    const compacted = latestByCapturedAt(entries, maxEntries)
+      .reverse()
+      .map((entry) => {
+        const args = Array.isArray(entry?.args) ? entry.args : [];
+        const message = entry?.message || entry?.text || args.join(' ');
+        const out = {
+          captured_at: entry?.captured_at || now(),
+          level: String(entry?.level || entry?.type || 'log'),
+        };
+        const safeMessage = redactPromptEcho(message, userPrompt);
+        if (safeMessage) {
+          out.message = shared.clip(safeMessage, 500);
+        }
+        return out;
+      });
+
+    return collapseConsecutiveDuplicates(compacted, (entry) => `${entry.level}\n${entry.message || ''}`);
+  };
+
   const endpointFromUrl = (value, baseHref = 'http://localhost/') => {
     const raw = String(value || '').trim();
     if (!raw) return '';
@@ -68,6 +122,12 @@
 
   return {
     latestByCapturedAt,
+    collapseConsecutiveDuplicates,
+    normalizedComparableText,
+    isPromptEcho,
+    redactPromptEcho,
+    redactPromptOccurrences,
+    compactConsoleActivity,
     endpointFromUrl,
     compactNetworkActivity,
   };

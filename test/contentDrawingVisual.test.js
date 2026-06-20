@@ -12,3 +12,10 @@ test('annotation shapes render non-obscuring regions and 10px arrow target circl
   assert.match(source, /\.region-rect\s*\{[\s\S]*fill:\s*none;[\s\S]*stroke:\s*#ff3b30;[\s\S]*stroke-width:\s*8;/);
   assert.doesNotMatch(source, /\.region-rect\s*\{[\s\S]*fill:\s*rgba/);
 });
+
+test('annotation overlay defaults to rectangle mode', () => {
+  assert.match(source, /const DEFAULT_TOOL = 'region';/);
+  assert.match(source, /activeTool = DEFAULT_TOOL;/);
+  assert.match(source, /data-tool="arrow" aria-pressed="false">Arrow/);
+  assert.match(source, /data-tool="region" aria-pressed="true">Rectangle/);
+});

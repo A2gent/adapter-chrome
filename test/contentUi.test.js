@@ -116,3 +116,19 @@ test('existing session view treats malformed message history as empty', () => {
 
   assert.match(html, /No inline messages yet\. Create a session to start\./);
 });
+
+test('overlay panel is movable and composer textareas are taller', () => {
+  const html = renderOverlay({
+    state: baseState(),
+    compactOverlayHeight: 176,
+    compactOverlayMinHeight: 144,
+    expandedOverlayMinHeight: 360,
+  });
+
+  assert.match(html, /left: var\(--a2gent-overlay-left/);
+  assert.match(html, /bottom: var\(--a2gent-overlay-bottom/);
+  assert.match(html, /width: min\(var\(--a2gent-overlay-width/);
+  assert.match(html, /header \{[\s\S]*cursor: move;/);
+  assert.match(html, /\.create-composer textarea \{[\s\S]*height: 82px;[\s\S]*min-height: 82px;/);
+  assert.match(html, /\.followup-row textarea \{ min-height: 88px; \}/);
+});

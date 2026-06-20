@@ -60,9 +60,10 @@
     * { box-sizing: border-box; }
     .panel {
       position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      left: var(--a2gent-overlay-left, 0px);
+      right: auto;
+      bottom: var(--a2gent-overlay-bottom, 0px);
+      width: min(var(--a2gent-overlay-width, 100vw), calc(100vw - var(--a2gent-overlay-left, 0px)));
       height: min(var(--a2gent-overlay-height), 60vh);
       min-height: ${compactOverlayMinHeight}px;
       max-height: 640px;
@@ -82,7 +83,19 @@
     .panel.is-new-session:not(.settings-open) { justify-content: flex-start; }
     .resize { position: absolute; top: 0; left: 0; right: 0; height: 7px; cursor: ns-resize; }
     header, .settings-row, .project-row, .session-bar, .followup-row, .actions, .header-actions { display: flex; align-items: center; gap: 8px; }
-    header { justify-content: space-between; flex: 0 0 auto; min-height: 32px; }
+    header {
+      justify-content: space-between;
+      flex: 0 0 auto;
+      min-height: 32px;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+    }
+    header textarea,
+    header input,
+    header select,
+    header button,
+    header a { cursor: auto; }
     header > div:first-child { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
     .header-actions { flex: 0 0 auto; }
     strong { font-weight: 700; }
@@ -153,12 +166,12 @@
       gap: 12px;
       align-items: center;
       flex: 0 0 auto;
-      min-height: 56px;
+      min-height: 84px;
     }
     .create-composer textarea {
-      height: 56px;
-      min-height: 56px;
-      max-height: 112px;
+      height: 82px;
+      min-height: 82px;
+      max-height: 160px;
       resize: none;
       overflow: auto;
       border-radius: 14px;
@@ -215,15 +228,19 @@
     .message pre { margin: 0; white-space: pre-wrap; color: #eef5ff; font: inherit; }
     .empty { color: #8fa1b9; }
     .followup-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
-    .followup-row textarea { min-height: 54px; }
+    .followup-row textarea { min-height: 88px; }
     .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
-      .panel { height: min(var(--a2gent-overlay-height), 60vh); padding: 10px 10px 12px; }
+      .panel {
+        width: min(var(--a2gent-overlay-width, 100vw), calc(100vw - var(--a2gent-overlay-left, 0px)));
+        height: min(var(--a2gent-overlay-height), 60vh);
+        padding: 10px 10px 12px;
+      }
       .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
       .header-actions button { width: auto; }
-      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; }
-      .create-composer textarea { height: 52px; min-height: 52px; padding: 13px 15px; font-size: 15px; }
+      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 76px; }
+      .create-composer textarea { height: 74px; min-height: 74px; padding: 13px 15px; font-size: 15px; }
       .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
       .send-icon { width: 28px; height: 28px; }
     }

@@ -65,6 +65,7 @@
     drawingStrokeCount: 0,
     sessionId: '',
     overlayHeight: COMPACT_OVERLAY_HEIGHT,
+    overlayPosition: {},
     settingsOpen: false,
   };
 
@@ -176,6 +177,12 @@
   const cancelDrawing = () => {
     drawingBridge.cancelDrawing();
     syncDrawingState();
+  };
+
+  const enableDrawingInput = () => {
+    const enabled = drawingBridge.enableDrawingInput();
+    syncDrawingState();
+    return enabled;
   };
 
   const disableDrawingInput = () => {
@@ -382,6 +389,7 @@
     const nextOpen = !state.open;
     if (nextOpen) {
       shouldFocusPrimaryControl = true;
+      enableDrawingInput();
     }
     setState({ open: nextOpen, settingsOpen: false });
     if (nextOpen && state.projects.length === 0 && !state.busy) {
