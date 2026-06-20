@@ -13,35 +13,13 @@
   const renderWiring = window.__A2GENT_CONTENT_SCRIPT_RENDER_WIRING__;
 
   const DEFAULT_BRUTE_BASE_URL = shared.DEFAULT_BRUTE_BASE_URL;
-  const DEFAULT_CAESAR_BASE_URL = shared.DEFAULT_CAESAR_BASE_URL;
-  const STORAGE_BASE_URL_KEY = shared.STORAGE_BASE_URL_KEY;
   const SOURCE = shared.SOURCE;
   const EXTENSION_VERSION = shared.EXTENSION_VERSION;
-  // Keep the literal event name visible in this entry file because source-based tests
-  // verify that the overlay submit contract stays wired here: a2gent-overlay-submit.
   const OVERLAY_SUBMIT_EVENT = shared.OVERLAY_SUBMIT_EVENT;
   const DRAWING_CHANGE_EVENT = shared.DRAWING_CHANGE_EVENT;
-  const DRAWING_ROOT_ID = shared.DRAWING_ROOT_ID;
-  const MAX_SELECTED_TEXT_LIGHT = shared.MAX_SELECTED_TEXT_LIGHT;
-  const MAX_SELECTED_TEXT_FULL = shared.MAX_SELECTED_TEXT_FULL;
-  const MAX_DOM_HTML = shared.MAX_DOM_HTML;
-  const MAX_DOM_TEXT = shared.MAX_DOM_TEXT;
-  const MAX_NETWORK_ENTRIES = shared.MAX_NETWORK_ENTRIES;
   const COMPACT_OVERLAY_HEIGHT = shared.COMPACT_OVERLAY_HEIGHT;
-  const COMPACT_OVERLAY_MIN_HEIGHT = shared.COMPACT_OVERLAY_MIN_HEIGHT;
-  const EXPANDED_OVERLAY_MIN_HEIGHT = shared.EXPANDED_OVERLAY_MIN_HEIGHT;
 
   const buildSessionDetailUrl = shared.buildSessionDetailUrl;
-  const shouldSubmitOverlayComposer = (event, role) => (
-    event.type === 'keydown'
-    && (role === 'prompt' || role === 'followup')
-    && event.key === 'Enter'
-    && !event.shiftKey
-    && !event.isComposing
-    && event.keyCode !== 229
-  );
-  // Keep the literal event.preventDefault() reference visible in this entry file because
-  // source-based tests assert that submit-on-Enter stays coupled to prevented textarea newlines.
 
   let host = null;
   let shadow = null;
@@ -127,11 +105,6 @@
     render();
   };
 
-  const validateLoopbackBaseUrl = shared.validateLoopbackBaseUrl;
-  const storageGet = shared.storageGet;
-  const storageSet = shared.storageSet;
-  const serializeApiOptions = shared.serializeApiOptions;
-  const sendRuntimeMessage = shared.sendRuntimeMessage;
 
   const client = api.createApiClient({ getBaseUrl: () => state.baseUrl || DEFAULT_BRUTE_BASE_URL });
   const createSession = client.createSession;

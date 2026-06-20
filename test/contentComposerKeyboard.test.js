@@ -8,11 +8,11 @@ const readFile = (relativePath) => fs.readFileSync(path.join(repoRoot, relativeP
 
 test('overlay composers submit on Enter and reserve Shift+Enter for newlines', () => {
   const contentScript = readFile('src/contentScript.js');
+  const overlayFocus = readFile('src/contentScript/overlayFocus.js');
   const pageHook = readFile('src/pageHook.js');
   const contentUi = readFile('src/contentUi.js');
 
-  for (const source of [contentScript, pageHook]) {
-    assert.match(source, /a2gent-overlay-submit/);
+  for (const source of [overlayFocus, pageHook]) {
     assert.match(source, /const shouldSubmitOverlayComposer = \(event, role\) => \(/);
     assert.match(source, /role === 'prompt' \|\| role === 'followup'/);
     assert.match(source, /event\.key === 'Enter'/);
@@ -20,6 +20,8 @@ test('overlay composers submit on Enter and reserve Shift+Enter for newlines', (
     assert.match(source, /event\.preventDefault\(\)/);
   }
 
+  assert.match(overlayFocus, /shared\.OVERLAY_SUBMIT_EVENT/);
+  assert.match(pageHook, /a2gent-overlay-submit/);
   assert.match(contentScript, /if \(role === 'prompt'\) \{\n\s+void startSession\(\);/);
   assert.match(contentScript, /if \(role === 'followup'\) \{\n\s+void sendFollowup\(\);/);
   assert.match(contentUi, /Start a new chat\.\.\. Enter to send, Shift\+Enter for newline\./);

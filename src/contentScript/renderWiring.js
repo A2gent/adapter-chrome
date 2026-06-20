@@ -40,7 +40,6 @@
   }) => {
     const shadow = getShadow();
     const host = getHost();
-    const state = getState();
     shadow.querySelector('[data-role="close"]')?.addEventListener('click', () => {
       disableDrawingInput();
       setState({ open: false, settingsOpen: false });
