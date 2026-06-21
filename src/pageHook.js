@@ -2,8 +2,6 @@
   const MAX_LOGS = 400;
   const MAX_NETWORK_COMPACT = 20;
   const MAX_NETWORK_FULL = 400;
-  const MAX_NETWORK_BODY_PREVIEW = 20000;
-  const MAX_NETWORK_HEADER_VALUE = 4000;
   const OVERLAY_SUBMIT_EVENT = 'a2gent-overlay-submit';
 
   const installKeyboardShield = () => {
@@ -112,59 +110,6 @@
     if (target.length > max) {
       target.splice(0, target.length - max);
     }
-
-  const headersToObject = (headers) => {
-    const out = {};
-    if (!headers) return out;
-    try {
-      const assign = (name, value) => {
-        const key = String(name || '').trim();
-        if (!key || /^(cookie|set-cookie)$/i.test(key)) return;
-        out[key] = clip(value, MAX_NETWORK_HEADER_VALUE);
-      };
-      if (typeof headers.forEach === 'function') {
-        headers.forEach((value, name) => assign(name, value));
-      } else if (Array.isArray(headers)) {
-        for (const [name, value] of headers) assign(name, value);
-      } else if (typeof headers === 'object') {
-        for (const [name, value] of Object.entries(headers)) assign(name, value);
-      }
-    } catch {
-      // Keep best-effort headers collected so far.
-    }
-    return out;
-  };
-
-  const bodyPreviewFromValue = (body) => {
-    if (body == null) return undefined;
-    if (typeof body === 'string') return clip(body, MAX_NETWORK_BODY_PREVIEW);
-    if (body instanceof URLSearchParams) return clip(body.toString(), MAX_NETWORK_BODY_PREVIEW);
-    if (body instanceof FormData) {
-      const entries = [];
-      for (const [name, value] of body.entries()) {
-        entries.push([name, value instanceof File ? `[file:${value.name || 'unnamed'}:${value.size}]` : clip(value, 1000)]);
-      }
-      return clip(JSON.stringify(entries), MAX_NETWORK_BODY_PREVIEW);
-    }
-    if (body instanceof Blob) return `[blob:${body.type || 'unknown'}:${body.size}]`;
-    if (body instanceof ArrayBuffer) return `[arraybuffer:${body.byteLength}]`;
-    if (ArrayBuffer.isView(body)) return `[typedarray:${body.byteLength}]`;
-    return clip(body, MAX_NETWORK_BODY_PREVIEW);
-  };
-
-  const responseBodyPreview = (response) => {
-    try {
-      const contentType = response.headers?.get?.('content-type') || '';
-      if (!/^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg\+xml)/i.test(contentType)) {
-        return undefined;
-      }
-      return response.clone().text()
-        .then((text) => clip(text, MAX_NETWORK_BODY_PREVIEW))
-        .catch(() => undefined);
-    } catch {
-      return Promise.resolve(undefined);
-    }
-  };
   };
 
   const serializeArgs = (args) => args.map((arg) => clip(arg, 4000));
