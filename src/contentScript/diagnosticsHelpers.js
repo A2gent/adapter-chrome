@@ -29,11 +29,45 @@
 
   const normalizedComparableText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
+  const compactPromptText = (value) => normalizedComparableText(value)
+    .toLowerCase()
+    // WHY: browser/page logs often contain transient punctuation and spacing while a prompt is being edited.
+    // WHAT: compare only alphanumeric content so near-identical edit echoes can be redacted together.
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+
+  const sharedPrefixRatio = (left, right) => {
+    if (!left || !right) return 0;
+    const max = Math.min(left.length, right.length);
+    let index = 0;
+    while (index < max && left[index] === right[index]) index += 1;
+    return index / Math.min(left.length, right.length);
+  };
+
+  const isSubsequence = (candidate, source) => {
+    if (!candidate || !source || candidate.length > source.length) return false;
+    let sourceIndex = 0;
+    for (const char of candidate) {
+      sourceIndex = source.indexOf(char, sourceIndex);
+      if (sourceIndex === -1) return false;
+      sourceIndex += 1;
+    }
+    return true;
+  };
+
+  const isPromptEditVariant = (value, userPrompt) => {
+    const text = compactPromptText(value);
+    const prompt = compactPromptText(userPrompt);
+    if (text.length < 24 || prompt.length < 24) return false;
+    if (prompt.includes(text) || text.includes(prompt)) return true;
+    if (Math.min(text.length, prompt.length) < Math.max(24, prompt.length * 0.55)) return false;
+    return sharedPrefixRatio(text, prompt) >= 0.82 || isSubsequence(text, prompt) || isSubsequence(prompt, text);
+  };
+
   const isPromptEcho = (value, userPrompt) => {
     const text = normalizedComparableText(value);
     const prompt = normalizedComparableText(userPrompt);
     if (text.length < 24 || prompt.length < 24) return false;
-    return prompt.includes(text) || text.includes(prompt);
+    return prompt.includes(text) || text.includes(prompt) || isPromptEditVariant(value, userPrompt);
   };
 
   const redactPromptEcho = (value, userPrompt, replacement = '[user prompt echo omitted]') => (

@@ -335,20 +335,126 @@
     return { selector, text_length: value.length };
   };
 
+  const keyboardCodeForKey = (key) => {
+    if (/^[a-z]$/i.test(key)) return `Key${key.toUpperCase()}`;
+    if (/^[0-9]$/.test(key)) return `Digit${key}`;
+    if (key === ' ') return 'Space';
+    return key;
+  };
+
+  const dispatchKeyboard = (target, type, key) => {
+    const event = new KeyboardEvent(type, {
+      key,
+      code: keyboardCodeForKey(key),
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    return accepted !== false && !event.defaultPrevented;
+  };
+
+  const selectionRangeFor = (element, valueLength) => {
+    const start = Number.isFinite(Number(element.selectionStart)) ? Number(element.selectionStart) : valueLength;
+    const end = Number.isFinite(Number(element.selectionEnd)) ? Number(element.selectionEnd) : start;
+    return {
+      start: Math.max(0, Math.min(valueLength, start)),
+      end: Math.max(0, Math.min(valueLength, end)),
+    };
+  };
+
+  const applyValueEdit = (element, key) => {
+    const value = String(element.value || '');
+    let { start, end } = selectionRangeFor(element, value.length);
+    let replacement = '';
+    let inputType = '';
+
+    if (key === 'Backspace') {
+      inputType = 'deleteContentBackward';
+      if (start === end && start > 0) start -= 1;
+    } else if (key === 'Delete') {
+      inputType = 'deleteContentForward';
+      if (start === end && end < value.length) end += 1;
+    } else if (key === 'Enter' && element.tagName === 'TEXTAREA') {
+      inputType = 'insertLineBreak';
+      replacement = '\n';
+    } else if (key.length === 1) {
+      inputType = 'insertText';
+      replacement = key;
+    } else {
+      return false;
+    }
+
+    if (!inputType || (start === end && replacement === '' && (key === 'Backspace' || key === 'Delete'))) {
+      return false;
+    }
+
+    const beforeInput = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      data: replacement || null,
+      inputType,
+    });
+    const accepted = element.dispatchEvent(beforeInput);
+    if (accepted === false || beforeInput.defaultPrevented) return false;
+
+    const nextValue = `${value.slice(0, start)}${replacement}${value.slice(end)}`;
+    const nextSelection = start + replacement.length;
+    element.value = nextValue;
+    element.selectionStart = nextSelection;
+    element.selectionEnd = nextSelection;
+    element.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      composed: true,
+      data: replacement || null,
+      inputType,
+    }));
+    return true;
+  };
+
+  const applyContentEditableEdit = (element, key) => {
+    if (key !== 'Backspace' && key !== 'Delete' && key !== 'Enter' && key.length !== 1) return false;
+    const value = String(element.textContent || '');
+    const replacement = key === 'Enter' ? '\n' : (key.length === 1 ? key : '');
+    const inputType = key === 'Backspace' ? 'deleteContentBackward'
+      : key === 'Delete' ? 'deleteContentForward'
+        : key === 'Enter' ? 'insertLineBreak'
+          : 'insertText';
+    const start = (key === 'Backspace' || key === 'Delete') ? Math.max(0, value.length - 1) : value.length;
+    const end = (key === 'Backspace' || key === 'Delete') ? value.length : value.length;
+    if (start === end && replacement === '') return false;
+    const beforeInput = new InputEvent('beforeinput', { bubbles: true, cancelable: true, composed: true, data: replacement || null, inputType });
+    const accepted = element.dispatchEvent(beforeInput);
+    if (accepted === false || beforeInput.defaultPrevented) return false;
+    element.textContent = `${value.slice(0, start)}${replacement}${value.slice(end)}`;
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, data: replacement || null, inputType }));
+    return true;
+  };
+
+  const applyKeyboardDefault = (target, key) => {
+    // WHY: synthetic KeyboardEvents do not perform browser default editing.
+    // WHAT: mirror the small set of text-editing defaults agents rely on after press_key.
+    if (!target || target.disabled || target.readOnly) return false;
+    if (target.isContentEditable) return applyContentEditableEdit(target, key);
+    if ('value' in target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      return applyValueEdit(target, key);
+    }
+    return false;
+  };
+
   const pressKey = (key) => {
     const target = document.activeElement || document.body || document.documentElement;
     const normalized = String(key || '').trim();
     if (!normalized) throw new Error('key is required');
-    for (const type of ['keydown', 'keyup']) {
-      target.dispatchEvent(new KeyboardEvent(type, {
-        key: normalized,
-        code: normalized.length === 1 ? `Key${normalized.toUpperCase()}` : normalized,
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-      }));
+    const shouldApplyDefault = dispatchKeyboard(target, 'keydown', normalized);
+    if (shouldApplyDefault) {
+      applyKeyboardDefault(target, normalized);
     }
-    return { key: normalized, target: selectorForElement(target) };
+    dispatchKeyboard(target, 'keyup', normalized);
+    const result = { key: normalized, target: selectorForElement(target) };
+    if ('value' in target) result.value = String(target.value || '');
+    if (target.isContentEditable) result.text = String(target.textContent || '');
+    return result;
   };
 
   const scrollTarget = (params) => {

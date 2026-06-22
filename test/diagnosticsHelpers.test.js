@@ -133,6 +133,20 @@ test('compactConsoleActivity removes repeated prompt echoes from automatic diagn
     { captured_at: '2026-01-01T00:00:02.000Z', level: 'log', message: '[user prompt echo omitted]', repeat_count: 2 },
   ]);
 });
+test('compactConsoleActivity redacts prompt edit variants instead of forwarding repeated partial strings', () => {
+  const userPrompt = 'whitepaper = pdf icon or?\nmodels = dolls?';
+  const entries = [
+    { captured_at: '2026-01-01T00:00:01.000Z', level: 'log', args: ['whitepaper = pdf icon or ?\nmodels = dolls?'] },
+    { captured_at: '2026-01-01T00:00:02.000Z', level: 'log', args: ['whitepaper = pdf icon o?\nmodels = dolls?'] },
+    { captured_at: '2026-01-01T00:00:03.000Z', level: 'log', args: ['whitepaper = pdf icon\nmodels = dolls?'] },
+    { captured_at: '2026-01-01T00:00:04.000Z', level: 'warn', args: ['real warning'] },
+  ];
+
+  assert.deepEqual(compactConsoleActivity(entries, 20, userPrompt), [
+    { captured_at: '2026-01-01T00:00:04.000Z', level: 'warn', message: 'real warning' },
+    { captured_at: '2026-01-01T00:00:03.000Z', level: 'log', message: '[user prompt echo omitted]', repeat_count: 3 },
+  ]);
+});
 
 test('prompt redaction helpers omit prompt echoes from captured page text', () => {
   const prompt = 'Please build a custom race selector with free text input support';

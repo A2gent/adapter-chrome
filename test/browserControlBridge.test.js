@@ -13,7 +13,14 @@ const toPlain = (value) => JSON.parse(JSON.stringify(value));
 class TestEvent {
   constructor(type, init = {}) {
     this.type = type;
+    this.defaultPrevented = false;
     Object.assign(this, init);
+  }
+
+  preventDefault() {
+    if (this.cancelable !== false) {
+      this.defaultPrevented = true;
+    }
   }
 }
 
@@ -39,6 +46,7 @@ class TestElement {
     this.scrollLeft = 0;
     this.scrollTop = 0;
     this.dispatchedEvents = [];
+    this.listeners = new Map();
     this.rect = {
       left: 0,
       top: 0,
@@ -84,12 +92,27 @@ class TestElement {
     this.dispatchedEvents.push({
       type: event.type,
       key: event.key,
+      code: event.code,
       data: event.data,
       inputType: event.inputType,
       clientX: event.clientX,
       clientY: event.clientY,
     });
-    return true;
+    for (const listener of this.listeners.get(event.type) || []) {
+      listener.call(this, event);
+    }
+    return !event.defaultPrevented;
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    this.listeners.set(type, listeners.filter((candidate) => candidate !== listener));
   }
 
   focus() {
@@ -467,7 +490,7 @@ test('browser control bridge executes polled commands and posts structured resul
   assert.equal(document.__elements.input.value, 'hello bridge');
   assert.deepEqual(document.__elements.input.dispatchedEvents.slice(0, 2).map((event) => event.type), ['input', 'change']);
 
-  assert.deepEqual(byId.press.result, { key: 'Enter', target: '#prompt' });
+  assert.deepEqual(byId.press.result, { key: 'Enter', target: '#prompt', value: 'hello bridge' });
   assert.deepEqual(document.__elements.input.dispatchedEvents.slice(2, 4).map((event) => event.type), ['keydown', 'keyup']);
 
   assert.equal(byId.click.result.target, '#save');
@@ -500,6 +523,52 @@ test('browser control bridge executes polled commands and posts structured resul
     media_type: 'image/png',
   });
   assert.deepEqual(byId.eval.result, { value: { evaluated: '1 + 1' } });
+});
+
+test('press_key applies native text-editing defaults to focused input controls', async () => {
+  const commands = [
+    { id: 'type', action: 'type', params: { selector: '#prompt', text: 'whitepaper = pdf icon or?' } },
+    { id: 'backspace', action: 'press_key', params: { key: 'Backspace' } },
+    { id: 'delete', action: 'press_key', params: { key: 'Delete' } },
+    { id: 'enter', action: 'press_key', params: { key: 'Enter' } },
+  ];
+  const { document, waitForResults } = loadBridge({ commands: commands.slice() });
+
+  const results = await waitForResults(commands.length);
+  const byId = Object.fromEntries(results.map((result) => [result.commandId, toPlain(result.payload)]));
+  const input = document.__elements.input;
+
+  assert.equal(byId.backspace.result.value, 'whitepaper = pdf icon or');
+  assert.equal(byId.delete.result.value, 'whitepaper = pdf icon or');
+  assert.equal(byId.enter.result.value, 'whitepaper = pdf icon or');
+  assert.equal(input.value, 'whitepaper = pdf icon or');
+  assert.deepEqual(
+    input.dispatchedEvents.slice(2).map((event) => event.type),
+    ['keydown', 'beforeinput', 'input', 'keyup', 'keydown', 'keyup', 'keydown', 'keyup'],
+  );
+  assert.deepEqual(
+    input.dispatchedEvents.slice(2).map((event) => event.inputType || ''),
+    ['', 'deleteContentBackward', 'deleteContentBackward', '', '', '', '', ''],
+  );
+});
+
+test('press_key respects cancelled beforeinput events', async () => {
+  const commands = [
+    { id: 'type', action: 'type', params: { selector: '#prompt', text: 'locked text' } },
+    { id: 'backspace', action: 'press_key', params: { key: 'Backspace' } },
+  ];
+  const { document, waitForResults } = loadBridge({ commands: commands.slice() });
+  document.__elements.input.addEventListener('beforeinput', (event) => event.preventDefault());
+
+  const results = await waitForResults(commands.length);
+  const byId = Object.fromEntries(results.map((result) => [result.commandId, toPlain(result.payload)]));
+
+  assert.equal(byId.backspace.result.value, 'locked text');
+  assert.equal(document.__elements.input.value, 'locked text');
+  assert.deepEqual(
+    document.__elements.input.dispatchedEvents.slice(2).map((event) => event.type),
+    ['keydown', 'beforeinput', 'keyup'],
+  );
 });
 
 test('browser control bridge posts command errors without stopping polling', async () => {
