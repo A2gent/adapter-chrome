@@ -54,7 +54,7 @@
     }
   };
 
-  const collectDomSnapshot = ({ drawingRootId = shared.DRAWING_ROOT_ID } = {}) => {
+  const collectDomSnapshot = ({ drawingRootId = shared.DRAWING_ROOT_ID, userPrompt = '' } = {}) => {
     const clone = document.documentElement.cloneNode(true);
     try {
       clone.querySelector('#a2gent-browser-adapter-root')?.remove();
@@ -63,8 +63,8 @@
       // Ignore DOM clone cleanup failures.
     }
     return {
-      html: shared.clip(clone.outerHTML || '', shared.MAX_DOM_HTML),
-      text: shared.clip(document.body?.innerText || document.documentElement?.textContent || '', shared.MAX_DOM_TEXT),
+      html: helpers.redactPromptOccurrences(shared.clip(clone.outerHTML || '', shared.MAX_DOM_HTML), userPrompt),
+      text: helpers.redactPromptOccurrences(shared.clip(document.body?.innerText || document.documentElement?.textContent || '', shared.MAX_DOM_TEXT), userPrompt),
       active_element: document.activeElement ? {
         tag: document.activeElement.tagName,
         id: document.activeElement.id || '',
@@ -114,11 +114,10 @@
           },
           user_agent: navigator.userAgent,
         },
-        user_prompt: userPrompt,
         focus_annotation: focusAnnotation || undefined,
-        selected_text: getSelectionText(shared.MAX_SELECTED_TEXT_FULL),
-        dom_snapshot: collectDomSnapshot(),
-        console_logs: pageDiagnostics.console_logs || [],
+        selected_text: helpers.redactPromptEcho(getSelectionText(shared.MAX_SELECTED_TEXT_FULL), userPrompt),
+        dom_snapshot: collectDomSnapshot({ userPrompt }),
+        console_logs: helpers.compactConsoleActivity(pageDiagnostics.console_logs, 20, userPrompt),
         page_errors: pageDiagnostics.page_errors || [],
         network_activity: helpers.compactNetworkActivity(pageDiagnostics.network_activity, shared.MAX_NETWORK_ENTRIES, shared.nowIso, location.href),
         exclusions: {

@@ -6,7 +6,7 @@
   const { createAnnotation, summarizeAnnotations } = window.__A2GENT_DRAWING_ANNOTATION__ || {};
   const ROOT_ID = 'a2gent-browser-adapter-drawing-root';
   const CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
-  const DEFAULT_TOOL = 'arrow';
+  const DEFAULT_TOOL = 'region';
 
   let host = null;
   let shadow = null;
@@ -218,7 +218,7 @@
     const hint = shadow.querySelector('[data-role="hint"]');
     if (hint) {
       hint.textContent = activeTool === 'region'
-        ? 'Drag to draw a numbered region. Add text in the popup; only the number appears in screenshots.'
+        ? 'Drag to draw a numbered rectangle. Add text in the popup; only the number appears in screenshots.'
         : 'Drag an arrow toward the element. Add text in the popup; only the number appears in screenshots.';
     }
   };
@@ -294,8 +294,8 @@
     editor.style.top = `${Math.round(position.top)}px`;
     editor.innerHTML = `
       <label>
-        <span>${markerText(annotation)} ${annotation.type === 'region' ? 'Region' : 'Arrow'} note</span>
-        <textarea data-role="annotation-text" rows="3" placeholder="Example: resize this button">${escapeHtml(annotation.text)}</textarea>
+        <span>${markerText(annotation)} ${annotation.type === 'region' ? 'Rectangle' : 'Arrow'} note</span>
+        <textarea data-role="annotation-text" rows="4" placeholder="Example: resize this button">${escapeHtml(annotation.text)}</textarea>
       </label>
       <div class="editor-actions">
         <button type="button" data-role="annotation-delete" class="danger">Delete</button>
@@ -475,7 +475,7 @@
         .annotation-editor label { display: grid; gap: 6px; }
         .annotation-editor span { color: #cbd5e1; font-size: 12px; font-weight: 700; }
         .annotation-editor textarea {
-          min-height: 74px;
+          min-height: 96px;
           resize: vertical;
           border: 1px solid rgba(155, 181, 220, .35);
           border-radius: 9px;
@@ -493,8 +493,8 @@
         <div class="shape-layer" data-role="shape-layer"></div>
         <div class="marker-layer" data-role="marker-layer"></div>
         <div class="toolbar" data-role="toolbar" hidden>
-          <button type="button" data-tool="arrow" aria-pressed="true">Arrow</button>
-          <button type="button" data-tool="region" aria-pressed="false">Region</button>
+          <button type="button" data-tool="arrow" aria-pressed="false">Arrow</button>
+          <button type="button" data-tool="region" aria-pressed="true">Rectangle</button>
         </div>
         <div class="hint" data-role="hint" hidden></div>
       </div>
@@ -574,7 +574,9 @@
   const setEnabled = (nextEnabled) => {
     ensureOverlay();
     enabled = Boolean(nextEnabled);
-    if (!enabled) {
+    if (enabled) {
+      activeTool = DEFAULT_TOOL;
+    } else {
       drag = null;
       closeTooltip();
       closeEditor();

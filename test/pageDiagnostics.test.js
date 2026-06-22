@@ -164,7 +164,7 @@ test('captureScreenshot hides only the adapter panel while Chrome captures the v
 test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', async (t) => {
   const { sentMessages } = installBrowserGlobals(t, {
     pageDiagnosticsPayload: {
-      console_logs: [{ level: 'info', message: 'ready' }],
+      console_logs: [{ captured_at: '2026-01-01T00:00:00.000Z', level: 'info', args: ['ready'] }],
       page_errors: [{ message: 'boom' }],
       network_activity: [{
         method: 'POST',
@@ -202,7 +202,7 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
   assert.equal(result.payload.source, shared.SOURCE);
   assert.equal(result.payload.extension_version, shared.EXTENSION_VERSION);
   assert.equal(result.payload.diagnostic_bundle_type, 'initial');
-  assert.equal(result.payload.user_prompt, 'Please inspect this page.');
+  assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'user_prompt'), false);
   assert.deepEqual(result.payload.focus_annotation, { strokes: 1, bounds: { x: 10, y: 20, width: 30, height: 40 } });
   assert.equal(result.payload.selected_text, 'selected browser text');
   assert.deepEqual(result.payload.page, {
@@ -219,7 +219,7 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
     },
     user_agent: 'Unit Test Browser/1.0',
   });
-  assert.deepEqual(result.payload.console_logs, [{ level: 'info', message: 'ready' }]);
+  assert.deepEqual(result.payload.console_logs, [{ captured_at: '2026-01-01T00:00:00.000Z', level: 'info', message: 'ready' }]);
   assert.deepEqual(result.payload.page_errors, [{ message: 'boom' }]);
   assert.deepEqual(result.payload.network_activity, [{
     method: 'POST',

@@ -22,6 +22,38 @@
     setShadow(host.attachShadow({ mode: 'open' }));
   };
 
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const numericOr = (value, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+
+  const clampOverlayPosition = (rawPosition = {}, state = {}, shadow = null) => {
+    const viewportWidth = Math.max(320, window.innerWidth || 320);
+    const viewportHeight = Math.max(240, window.innerHeight || 240);
+    const margin = 8;
+    const maxWidth = Math.max(280, viewportWidth - (margin * 2));
+    const defaultWidth = Math.min(760, maxWidth);
+    const width = clamp(numericOr(rawPosition.width, defaultWidth), Math.min(320, maxWidth), maxWidth);
+    const panelHeight = shadow?.querySelector?.('.panel')?.getBoundingClientRect?.().height
+      || Math.max(numericOr(state.overlayHeight, shared.COMPACT_OVERLAY_HEIGHT), shared.COMPACT_OVERLAY_MIN_HEIGHT);
+    const defaultLeft = Math.round((viewportWidth - width) / 2);
+    const left = clamp(numericOr(rawPosition.left, defaultLeft), margin, Math.max(margin, viewportWidth - width - margin));
+    const bottom = clamp(numericOr(rawPosition.bottom, 12), margin, Math.max(margin, viewportHeight - panelHeight - margin));
+    return { left, bottom, width };
+  };
+
+  const applyOverlayLayout = (host, state, shadow = null) => {
+    if (!host || !state) return null;
+    const position = clampOverlayPosition(state.overlayPosition, state, shadow);
+    state.overlayPosition = position;
+    host.style.setProperty('--a2gent-overlay-left', `${Math.round(position.left)}px`);
+    host.style.setProperty('--a2gent-overlay-bottom', `${Math.round(position.bottom)}px`);
+    host.style.setProperty('--a2gent-overlay-width', `${Math.round(position.width)}px`);
+    return position;
+  };
+
   const attachEvents = ({
     getShadow,
     getHost,
@@ -86,6 +118,34 @@
         const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + (startY - moveEvent.clientY)));
         getState().overlayHeight = nextHeight;
         host.style.setProperty('--a2gent-overlay-height', `${nextHeight}px`);
+        applyOverlayLayout(host, getState(), shadow);
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    const dragHandle = shadow.querySelector('header');
+    dragHandle?.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      if (event.target?.closest?.('button, input, select, textarea, a, [data-role="resize"]')) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const currentState = getState();
+      const startPosition = applyOverlayLayout(host, currentState, shadow) || clampOverlayPosition(currentState.overlayPosition, currentState, shadow);
+      const onMove = (moveEvent) => {
+        moveEvent.preventDefault();
+        const nextPosition = clampOverlayPosition({
+          ...startPosition,
+          left: startPosition.left + (moveEvent.clientX - startX),
+          bottom: startPosition.bottom - (moveEvent.clientY - startY),
+        }, getState(), shadow);
+        getState().overlayPosition = nextPosition;
+        applyOverlayLayout(host, getState(), shadow);
       };
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
@@ -103,6 +163,7 @@
     if (!host || !shadow) return;
     host.style.display = state.open ? 'block' : 'none';
     host.style.setProperty('--a2gent-overlay-height', `${state.overlayHeight}px`);
+    applyOverlayLayout(host, state, shadow);
     if (!state.open) return;
 
     const ui = window.__A2GENT_CONTENT_UI__;
@@ -121,6 +182,7 @@
       expandedOverlayMinHeight: shared.EXPANDED_OVERLAY_MIN_HEIGHT,
     });
     attachEvents();
+    applyOverlayLayout(host, state, shadow);
     restoreOverlayFocusSnapshot(focusSnapshot);
     if (consumeShouldFocusPrimaryControl()) {
       window.requestAnimationFrame(focusPrimaryControl);

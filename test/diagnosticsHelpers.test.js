@@ -3,7 +3,14 @@ const assert = require('node:assert/strict');
 
 const diagnostics = require('../src/contentScript/diagnosticsHelpers.js');
 
-const { latestByCapturedAt, endpointFromUrl, compactNetworkActivity } = diagnostics;
+const {
+  latestByCapturedAt,
+  endpointFromUrl,
+  compactNetworkActivity,
+  compactConsoleActivity,
+  redactPromptEcho,
+  redactPromptOccurrences,
+} = diagnostics;
 
 test('latestByCapturedAt keeps the newest records without mutating the input', () => {
   const entries = [
@@ -110,4 +117,29 @@ test('compactNetworkActivity includes bounded optional failure metadata', () => 
     duration_ms: 13,
     error_message: `${longError.slice(0, 500)}…[truncated]`,
   });
+});
+
+test('compactConsoleActivity removes repeated prompt echoes from automatic diagnostics', () => {
+  const userPrompt = 'for races, lets create custom component that allows to have a drop-down like select, but also allows to write free text';
+  const entries = [
+    { captured_at: '2026-01-01T00:00:01.000Z', level: 'log', args: [userPrompt.slice(0, 60)] },
+    { captured_at: '2026-01-01T00:00:02.000Z', level: 'log', args: [userPrompt.slice(0, 90)] },
+    { captured_at: '2026-01-01T00:00:03.000Z', level: 'warn', args: ['real warning'] },
+    { captured_at: '2026-01-01T00:00:04.000Z', level: 'warn', args: ['real warning'] },
+  ];
+
+  assert.deepEqual(compactConsoleActivity(entries, 20, userPrompt), [
+    { captured_at: '2026-01-01T00:00:04.000Z', level: 'warn', message: 'real warning', repeat_count: 2 },
+    { captured_at: '2026-01-01T00:00:02.000Z', level: 'log', message: '[user prompt echo omitted]', repeat_count: 2 },
+  ]);
+});
+
+test('prompt redaction helpers omit prompt echoes from captured page text', () => {
+  const prompt = 'Please build a custom race selector with free text input support';
+
+  assert.equal(redactPromptEcho(`  ${prompt}  `, prompt), '[user prompt echo omitted]');
+  assert.equal(
+    redactPromptOccurrences(`Before ${prompt} after ${prompt}`, prompt),
+    'Before [user prompt omitted] after [user prompt omitted]',
+  );
 });

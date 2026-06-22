@@ -38,6 +38,13 @@
     drawingOverlay.clear({ exit: true });
   };
 
+  const enableDrawingInput = () => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay) return false;
+    drawingOverlay.setEnabled(true);
+    return true;
+  };
+
   const disableDrawingInput = () => {
     const drawingOverlay = getDrawingOverlay();
     if (!drawingOverlay) return;
@@ -51,6 +58,7 @@
     syncDrawingState,
     toggleDrawing,
     cancelDrawing,
+    enableDrawingInput,
     disableDrawingInput,
     getDrawingSummary,
   };
