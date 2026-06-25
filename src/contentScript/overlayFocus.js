@@ -108,7 +108,8 @@
       const role = roleFromOverlayEvent(event);
       if (shouldSubmitOverlayComposer(event, role)) {
         event.preventDefault();
-        event.stopImmediatePropagation();
+        event.stopPropagation();
+      event.stopImmediatePropagation();
         if (typeof onSubmit === 'function') {
           onSubmit(role, event);
         } else {
@@ -120,6 +121,7 @@
       // WHY: pages such as YouTube install global keyboard shortcuts on window/document.
       // WHAT: stop overlay-originated key events before page listeners see them, while leaving
       // browser default text editing intact by not calling preventDefault for normal typing.
+      event.stopPropagation();
       event.stopImmediatePropagation();
     };
 

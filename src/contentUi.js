@@ -77,6 +77,9 @@
       border-top: 1px solid rgba(145, 181, 255, 0.28);
       box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.45);
       font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      direction: ltr;
+      text-align: left;
+      unicode-bidi: isolate;
     }
     .panel.has-session,
     .panel.settings-open { min-height: ${expandedOverlayMinHeight}px; }

@@ -16,6 +16,7 @@
     if (getHost() && getShadow()) return;
     const host = document.createElement('div');
     host.id = 'a2gent-browser-adapter-root';
+    host.setAttribute('dir', 'ltr');
     host.style.display = 'none';
     document.documentElement.appendChild(host);
     setHost(host);

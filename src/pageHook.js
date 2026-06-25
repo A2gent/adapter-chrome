@@ -69,6 +69,7 @@
       // WHY: site shortcut handlers such as YouTube's live in the page's MAIN world, where
       // Shadow DOM retargeting can make overlay textarea keystrokes look like page-level keys.
       // WHAT: stop overlay-originated key events in MAIN world without preventing normal text editing.
+      event.stopPropagation();
       event.stopImmediatePropagation();
     };
 

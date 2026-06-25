@@ -47,7 +47,7 @@
 
   const annotationType = (value) => {
     const type = String(value || '').toLowerCase();
-    return type === 'arrow' || type === 'region' ? type : '';
+    return type === 'arrow' || type === 'region' || type === 'element' ? type : '';
   };
 
   const annotationText = (value) => String(value || '').trim().slice(0, 500);
@@ -87,12 +87,22 @@
     const y = Math.min(first.y, second.y);
     const width = Math.abs(second.x - first.x);
     const height = Math.abs(second.y - first.y);
-    if (width < 6 || height < 6) return null;
+    const minSize = type === 'element' ? 1 : 6;
+    if (width < minSize || height < minSize) return null;
+    const element = rawAnnotation.element && typeof rawAnnotation.element === 'object'
+      ? {
+        tag: String(rawAnnotation.element.tag || '').toLowerCase().slice(0, 80),
+        id: String(rawAnnotation.element.id || '').slice(0, 120),
+        className: String(rawAnnotation.element.className || '').slice(0, 240),
+        text: annotationText(rawAnnotation.element.text),
+      }
+      : undefined;
     return {
       number,
       type,
       text,
       geometry: { x, y, width, height },
+      ...(type === 'element' && element ? { element } : {}),
     };
   };
 
@@ -128,6 +138,9 @@
         number: annotation.number,
         type: annotation.type,
         text: annotation.text,
+        // WHY: element selections target a specific DOM node — the prompt needs the
+        // tag/id/class/text descriptor to know which element the number points at.
+        ...(annotation.type === 'element' && annotation.element ? { element: annotation.element } : {}),
       })),
     };
   };

@@ -7,6 +7,7 @@
   const ROOT_ID = 'a2gent-browser-adapter-drawing-root';
   const CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
   const DEFAULT_TOOL = 'region';
+  const TOOLS = ['arrow', 'region', 'element'];
 
   let host = null;
   let shadow = null;
@@ -15,6 +16,7 @@
   let activeTool = DEFAULT_TOOL;
   let drag = null;
   let annotations = [];
+  let elementPreview = null;
   let nextNumber = 1;
   let scrollRedrawFrame = null;
 
@@ -81,8 +83,87 @@
 
   const sanitizeText = (value) => String(value || '').trim().slice(0, 500);
 
+  const elementSummary = (element) => {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return null;
+    return {
+      tag: String(element.tagName || '').toLowerCase(),
+      id: element.id || '',
+      className: typeof element.className === 'string' ? element.className : '',
+      text: sanitizeText(element.innerText || element.textContent || ''),
+    };
+  };
+
+  const elementFromViewportPoint = (clientX, clientY) => {
+    if (!host) return null;
+    // WHY: the host carries pointer-events:auto while drawing, and the inner surface
+    // sets pointer-events:auto inline — a descendant override re-enables hit-testing even
+    // when the host is set to none, so document.elementFromPoint would just hit our own
+    // overlay (retargeted to host) and we'd never see the page element beneath the cursor.
+    // WHAT: suppress pointer-events on both the host and the surface for the hit-test.
+    const previousHostPointerEvents = host.style.pointerEvents;
+    const previousSurfacePointerEvents = surface ? surface.style.pointerEvents : '';
+    host.style.pointerEvents = 'none';
+    if (surface) surface.style.pointerEvents = 'none';
+    try {
+      const element = document.elementFromPoint(clientX, clientY);
+      if (!element || element === document.documentElement || element === document.body) return null;
+      if (element === host || host.contains(element)) return null;
+      return element;
+    } finally {
+      host.style.pointerEvents = previousHostPointerEvents;
+      if (surface) surface.style.pointerEvents = previousSurfacePointerEvents;
+    }
+  };
+
+  const boxFromElement = (element) => {
+    const rect = element?.getBoundingClientRect?.();
+    if (!rect || rect.width < 1 || rect.height < 1) return null;
+    const scroll = scrollPosition();
+    return {
+      x: rect.left + scroll.x,
+      y: rect.top + scroll.y,
+      width: rect.width,
+      height: rect.height,
+    };
+  };
+
+  const isDrawingUiEvent = (event) => {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    return path.some((node) => (
+      node
+      && typeof node.closest === 'function'
+      && node.closest('[data-role="annotation-editor"], [data-role="toolbar"], [data-role="annotation-marker"]')
+    ));
+  };
+
+  const updateElementPreviewFromPoint = (clientX, clientY) => {
+    elementPreview = boxFromElement(elementFromViewportPoint(clientX, clientY));
+    redraw();
+  };
+
+  const commitElementFromPoint = (clientX, clientY) => {
+    const element = elementFromViewportPoint(clientX, clientY);
+    const geometry = boxFromElement(element);
+    const finished = geometry
+      ? createDraftAnnotation({ type: 'element', number: nextNumber, text: '', geometry, element: elementSummary(element) })
+      : null;
+    elementPreview = geometry;
+    if (finished) {
+      annotations = [...annotations, finished];
+      nextNumber += 1;
+      redraw();
+      applyVisibility();
+      emitChange();
+      openEditor(finished);
+    } else {
+      redraw();
+      applyVisibility();
+      emitChange();
+    }
+  };
+
   const markerAnchor = (annotation) => {
-    if (annotation.type === 'region') {
+    if (annotation.type === 'region' || annotation.type === 'element') {
       return pointToViewport({ x: annotation.geometry.x, y: annotation.geometry.y });
     }
     return pointToViewport(annotation.geometry.end);
@@ -125,16 +206,41 @@
     `;
   };
 
+  const svgElement = (annotation) => {
+    const topLeft = pointToViewport({ x: annotation.geometry.x, y: annotation.geometry.y });
+    const previewClass = annotation.preview ? ' element-preview-rect' : '';
+    return `
+      <rect
+        class="element-rect${previewClass}"
+        x="${topLeft.x}"
+        y="${topLeft.y}"
+        width="${annotation.geometry.width}"
+        height="${annotation.geometry.height}"
+        rx="4"
+        ry="4"
+      ></rect>
+    `;
+  };
+
+  const svgAnnotation = (annotation) => {
+    if (annotation.type === 'arrow') return svgLine(annotation);
+    if (annotation.type === 'element') return svgElement(annotation);
+    return svgRegion(annotation);
+  };
+
   const previewMarkup = () => {
+    if (activeTool === 'element' && elementPreview) {
+      return svgElement({ number: nextNumber, type: 'element', text: '', geometry: elementPreview, preview: true });
+    }
     if (!drag) return '';
     const draft = createDraftAnnotation({ number: nextNumber, text: '', ...drag });
     if (!draft) return '';
-    return draft.type === 'arrow' ? svgLine(draft) : svgRegion(draft);
+    return svgAnnotation(draft);
   };
 
-  const createDraftAnnotation = ({ type, number, text, start, end }) => {
+  const createDraftAnnotation = ({ type, number, text, start, end, geometry, element }) => {
     if (typeof createAnnotation === 'function') {
-      return createAnnotation({ type, number, text, start, end }, viewport());
+      return createAnnotation({ type, number, text, start, end, geometry, element }, viewport());
     }
     return null;
   };
@@ -202,7 +308,7 @@
     if (!shapeLayer) return;
     shapeLayer.innerHTML = `
       <svg class="shape-svg" width="100%" height="100%" aria-hidden="true">
-        ${annotations.map((annotation) => (annotation.type === 'arrow' ? svgLine(annotation) : svgRegion(annotation))).join('')}
+        ${annotations.map((annotation) => svgAnnotation(annotation)).join('')}
         ${previewMarkup()}
       </svg>
     `;
@@ -217,9 +323,12 @@
     });
     const hint = shadow.querySelector('[data-role="hint"]');
     if (hint) {
-      hint.textContent = activeTool === 'region'
-        ? 'Drag to draw a numbered rectangle. Add text in the popup; only the number appears in screenshots.'
-        : 'Drag an arrow toward the element. Add text in the popup; only the number appears in screenshots.';
+      const hints = {
+        region: 'Drag to draw a numbered rectangle. Add text in the popup; only the number appears in screenshots.',
+        arrow: 'Drag an arrow toward the element. Add text in the popup; only the number appears in screenshots.',
+        element: 'Move the cursor and click a DOM element. It will be highlighted with a precise 2px red border.',
+      };
+      hint.textContent = hints[activeTool] || hints.region;
     }
   };
 
@@ -270,6 +379,12 @@
     shadow.querySelector('.wrap')?.appendChild(tooltip);
   };
 
+  const annotationTypeLabel = (type) => {
+    if (type === 'region') return 'Rectangle';
+    if (type === 'element') return 'Element';
+    return 'Arrow';
+  };
+
   const updateAnnotationText = (number, text, { emit = true } = {}) => {
     const nextText = sanitizeText(text);
     annotations = annotations.map((annotation) => (
@@ -278,8 +393,9 @@
     redraw();
     const annotation = annotations.find((item) => item.number === number);
     if (emit && annotation) {
-      emitChange({ updatedReference: { number: annotation.number, type: annotation.type, text: annotation.text } });
+      emitChange({ committedReference: { number: annotation.number, type: annotation.type, text: annotation.text } });
     }
+    return annotation || null;
   };
 
   const openEditor = (annotation) => {
@@ -294,7 +410,7 @@
     editor.style.top = `${Math.round(position.top)}px`;
     editor.innerHTML = `
       <label>
-        <span>${markerText(annotation)} ${annotation.type === 'region' ? 'Rectangle' : 'Arrow'} note</span>
+        <span>${markerText(annotation)} ${annotationTypeLabel(annotation.type)} note</span>
         <textarea data-role="annotation-text" rows="4" placeholder="Example: resize this button">${escapeHtml(annotation.text)}</textarea>
       </label>
       <div class="editor-actions">
@@ -304,7 +420,7 @@
     `;
     shadow.querySelector('.wrap')?.appendChild(editor);
     const textarea = editor.querySelector('[data-role="annotation-text"]');
-    textarea?.addEventListener('input', (event) => updateAnnotationText(annotation.number, event.target.value));
+    textarea?.addEventListener('input', (event) => updateAnnotationText(annotation.number, event.target.value, { emit: false }));
     editor.querySelector('[data-role="annotation-delete"]')?.addEventListener('click', (event) => {
       event.preventDefault();
       annotations = annotations.filter((item) => item.number !== annotation.number);
@@ -317,6 +433,10 @@
     editor.querySelector('[data-role="annotation-done"]')?.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      const committed = updateAnnotationText(annotation.number, textarea?.value || '', { emit: false });
+      if (committed) {
+        emitChange({ committedReference: { number: committed.number, type: committed.type, text: committed.text } });
+      }
       closeEditor();
     });
     textarea?.focus({ preventScroll: true });
@@ -334,13 +454,15 @@
       const hint = shadow.querySelector('[data-role="hint"]');
       if (toolbar) toolbar.hidden = !enabled;
       if (hint) hint.hidden = !enabled;
+      if (surface) surface.classList.toggle('is-element-tool', enabled && activeTool === 'element');
     }
   };
 
   const setTool = (tool) => {
-    if (tool !== 'arrow' && tool !== 'region') return;
+    if (!TOOLS.includes(tool)) return;
     activeTool = tool;
     redraw();
+    applyVisibility();
     emitChange();
   };
 
@@ -349,6 +471,7 @@
 
     host = document.createElement('div');
     host.id = ROOT_ID;
+    host.setAttribute('dir', 'ltr');
     host.style.display = 'none';
     host.style.position = 'fixed';
     host.style.inset = '0';
@@ -360,10 +483,12 @@
     shadow.innerHTML = `
       <style>
         :host { all: initial; }
-        .wrap { position: fixed; inset: 0; font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-        .surface { position: absolute; inset: 0; cursor: crosshair; touch-action: none; }
+        .wrap { position: fixed; inset: 0; direction: ltr; unicode-bidi: isolate; text-align: left; font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .surface { position: absolute; inset: 0; z-index: 1; cursor: crosshair; touch-action: none; }
+        .surface.is-element-tool { cursor: cell; }
         .shape-layer, .marker-layer { position: absolute; inset: 0; pointer-events: none; }
-        .shape-svg { position: absolute; inset: 0; overflow: visible; }
+        .shape-layer { z-index: 2; }
+        .shape-svg { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
         .arrow-line {
           stroke: #ff3b30;
           stroke-width: 5;
@@ -384,7 +509,20 @@
           vector-effect: non-scaling-stroke;
           filter: drop-shadow(0 2px 5px rgba(0,0,0,.62));
         }
-        .marker-layer { z-index: 2; }
+        .element-rect {
+          fill: rgba(255, 59, 48, 0.10);
+          stroke: #ff3b30;
+          stroke-width: 2;
+          stroke-linejoin: round;
+          vector-effect: non-scaling-stroke;
+          filter: drop-shadow(0 1px 3px rgba(0,0,0,.45));
+        }
+        .element-preview-rect {
+          fill: rgba(255, 59, 48, 0.16);
+          stroke: #ff3b30;
+          stroke-dasharray: 6 4;
+        }
+        .marker-layer { z-index: 3; }
         .marker {
           position: absolute;
           transform: translate(-50%, -50%);
@@ -495,6 +633,7 @@
         <div class="toolbar" data-role="toolbar" hidden>
           <button type="button" data-tool="arrow" aria-pressed="false">Arrow</button>
           <button type="button" data-tool="region" aria-pressed="true">Rectangle</button>
+          <button type="button" data-tool="element" aria-pressed="false">Element</button>
         </div>
         <div class="hint" data-role="hint" hidden></div>
       </div>
@@ -515,6 +654,11 @@
       event.preventDefault();
       event.stopPropagation();
       closeEditor();
+      if (activeTool === 'element') {
+        commitElementFromPoint(event.clientX, event.clientY);
+        return;
+      }
+      elementPreview = null;
       drag = {
         type: activeTool,
         pointerId: event.pointerId,
@@ -531,7 +675,12 @@
     });
 
     surface.addEventListener('pointermove', (event) => {
-      if (!enabled || !drag || event.pointerId !== drag.pointerId) return;
+      if (!enabled) return;
+      if (activeTool === 'element' && !drag) {
+        updateElementPreviewFromPoint(event.clientX, event.clientY);
+        return;
+      }
+      if (!drag || event.pointerId !== drag.pointerId) return;
       event.preventDefault();
       event.stopPropagation();
       drag = { ...drag, end: pointFromEvent(event) };
@@ -565,6 +714,22 @@
 
     surface.addEventListener('pointerup', finishDrag);
     surface.addEventListener('pointercancel', finishDrag);
+
+    // WHY: the visual shape layer can sit above the input surface, and pages can have
+    // unusual stacking contexts. WHAT: capture element-mode pointer activity at window
+    // level so hover highlighting and click selection keep working regardless of layer hit-testing.
+    window.addEventListener('pointermove', (event) => {
+      if (!enabled || activeTool !== 'element' || drag || isDrawingUiEvent(event)) return;
+      updateElementPreviewFromPoint(event.clientX, event.clientY);
+    }, { capture: true });
+    window.addEventListener('pointerdown', (event) => {
+      if (!enabled || activeTool !== 'element' || event.button !== 0 || isDrawingUiEvent(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeEditor();
+      commitElementFromPoint(event.clientX, event.clientY);
+    }, { capture: true });
+
     window.addEventListener('resize', scheduleRedraw);
     window.addEventListener('scroll', scheduleRedraw, { passive: true });
     redraw();
@@ -578,6 +743,7 @@
       activeTool = DEFAULT_TOOL;
     } else {
       drag = null;
+      elementPreview = null;
       closeTooltip();
       closeEditor();
     }
@@ -589,6 +755,7 @@
   const clear = ({ exit = true } = {}) => {
     annotations = [];
     drag = null;
+    elementPreview = null;
     nextNumber = 1;
     closeTooltip();
     closeEditor();

@@ -26,3 +26,23 @@ test('render wiring supports dragging the overlay panel independently of resizin
   assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-left'/);
   assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-bottom'/);
 });
+
+test('overlay rendering is isolated from RTL pages', () => {
+  const contentUi = readFile('src/contentUi.js');
+  const renderWiring = readFile('src/contentScript/renderWiring.js');
+  const contentDrawing = readFile('src/contentDrawing.js');
+
+  assert.match(contentUi, /\.panel \{[\s\S]*direction: ltr;[\s\S]*text-align: left;/);
+  assert.match(contentUi, /\.panel \{[\s\S]*unicode-bidi: isolate;/);
+  assert.match(renderWiring, /host\.setAttribute\('dir', 'ltr'\);/);
+  assert.match(contentDrawing, /host\.setAttribute\('dir', 'ltr'\);/);
+  assert.match(contentDrawing, /\.wrap \{[\s\S]*direction: ltr;[\s\S]*unicode-bidi: isolate;/);
+});
+
+test('annotation reference text is synchronized only after committed editor submit', () => {
+  const contentScript = readFile('src/contentScript.js');
+
+  assert.match(contentScript, /if \(detail\.committedReference\) \{/);
+  assert.match(contentScript, /syncAnnotationReferenceText\(detail\.committedReference\);/);
+  assert.doesNotMatch(contentScript, /updatedReference/);
+});

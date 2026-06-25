@@ -287,8 +287,8 @@
 
   window.addEventListener(DRAWING_CHANGE_EVENT, (event) => {
     const detail = event.detail || {};
-    if (detail.updatedReference) {
-      syncAnnotationReferenceText(detail.updatedReference);
+    if (detail.committedReference) {
+      syncAnnotationReferenceText(detail.committedReference);
     }
     setState({
       drawingEnabled: Boolean(detail.enabled),
