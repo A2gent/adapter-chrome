@@ -256,7 +256,7 @@
     return `
       <section class="settings-panel" aria-label="Adapter settings">
         <section class="warning">
-          Diagnosis sends a broad page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, DOM/text snapshot, console/errors and the latest 20 endpoint-level network records. Cookies, browser storage, network headers and request/response bodies are excluded.
+          Diagnosis sends a compact page diagnostic bundle to your local Brute instance: URL, title, selected text, screenshot, console logs and page errors. DOM snapshots and network logs are omitted from automatic posts so agents can fetch them on demand only when needed. Cookies, browser storage, network headers and request/response bodies are excluded.
         </section>
         <div class="settings-row">
           <label>

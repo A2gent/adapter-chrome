@@ -116,14 +116,13 @@
         },
         focus_annotation: focusAnnotation || undefined,
         selected_text: helpers.redactPromptEcho(getSelectionText(shared.MAX_SELECTED_TEXT_FULL), userPrompt),
-        dom_snapshot: collectDomSnapshot({ userPrompt }),
         console_logs: helpers.compactConsoleActivity(pageDiagnostics.console_logs, 20, userPrompt),
         page_errors: pageDiagnostics.page_errors || [],
-        network_activity: helpers.compactNetworkActivity(pageDiagnostics.network_activity, shared.MAX_NETWORK_ENTRIES, shared.nowIso, location.href),
         exclusions: {
           cookies: 'excluded by specification; extension does not read document.cookie or Cookie/Set-Cookie headers',
           browser_storage: 'excluded by specification; extension does not read localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted storage',
-          network_details: 'network diagnostics are limited to latest 20 endpoint-level records and compact timing entries; request/response headers, bodies, URL query strings, and URL fragments are omitted',
+          dom_snapshot: 'omitted from automatic diagnostic posts because it can be too large; agents can request page content on demand with browser-control commands',
+          network_activity: 'omitted from automatic diagnostic posts because it can be too large; agents can request network logs on demand with get_network_logs',
         },
       },
     };

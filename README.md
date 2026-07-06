@@ -56,15 +56,15 @@ When multiple project patterns match the current URL, the extension scores them 
 
 ## Diagnostic capture model
 
-Creating a session is an explicit user-initiated diagnosis action. The extension sends a broad diagnostic bundle to the selected local Brute project session:
+Creating a session is an explicit user-initiated diagnosis action. The extension sends a compact diagnostic bundle to the selected local Brute project session:
 
 - Current page URL and title.
 - User prompt text.
 - Current selected text when present.
 - Visible-page screenshot as an image attachment. If the user uses **Annotate** first, the screenshot includes numbered arrow/region markers only; annotation note text is copied into the prompt as `N: text` references and compact `focus_annotation` JSON references, not rendered over the page.
-- DOM/text snapshot.
 - Console logs and runtime/page errors observed after the extension hook loaded.
-- Browser-observed fetch/XHR network records limited to the latest 20 endpoint-level entries: captured time, type, method, URL without query/fragment, status, duration, and compact error text. Request/response headers and bodies are not included.
+
+DOM/text snapshots and browser-observed fetch/XHR network records are omitted from automatic diagnostic posts because they can be too large. Agents can request page content or network logs on demand through browser-control commands when needed.
 
 The diagnostic bundle is embedded as a machine-readable JSON block in the Brute message text. Screenshots are sent as Brute image attachments. Created sessions include metadata labels such as `source: "adapter-chrome"` and `created_by: "adapter-chrome-extension"`, so Caesar can display that they came from the extension.
 

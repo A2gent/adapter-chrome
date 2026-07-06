@@ -221,18 +221,12 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
   });
   assert.deepEqual(result.payload.console_logs, [{ captured_at: '2026-01-01T00:00:00.000Z', level: 'info', message: 'ready' }]);
   assert.deepEqual(result.payload.page_errors, [{ message: 'boom' }]);
-  assert.deepEqual(result.payload.network_activity, [{
-    method: 'POST',
-    endpoint: 'https://api.example.test/items',
-    status: 201,
-    ok: true,
-    content_type: 'application/json',
-    duration_ms: 12,
-    captured_at: '2026-01-01T00:00:01.000Z',
-  }]);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'dom_snapshot'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'network_activity'), false);
   assert.match(result.payload.exclusions.cookies, /does not read document\.cookie/);
   assert.match(result.payload.exclusions.browser_storage, /does not read localStorage/);
-  assert.match(result.payload.exclusions.network_details, /URL query strings/);
+  assert.match(result.payload.exclusions.dom_snapshot, /omitted from automatic diagnostic posts/);
+  assert.match(result.payload.exclusions.network_activity, /get_network_logs/);
 });
 
 test('message helpers append labeled JSON payloads and strip screenshot data-url prefixes', () => {
