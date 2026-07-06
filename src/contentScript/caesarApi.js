@@ -48,14 +48,19 @@
       }
     };
 
-    const createSession = async (projectId, metadata) => {
+    const createSession = async (projectId, metadata, options = {}) => {
       const provider = await activeProviderType();
+      const images = Array.isArray(options.images) ? options.images : [];
       return apiFetch('/sessions', {
         method: 'POST',
         body: JSON.stringify({
           agent_id: 'build',
           project_id: projectId || undefined,
           provider: provider || undefined,
+          task: typeof options.task === 'string' && options.task.trim() ? options.task : undefined,
+          images: images.length > 0 ? images : undefined,
+          queued: true,
+          queue_mode: 'serial',
           metadata,
         }),
       });

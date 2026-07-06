@@ -41,3 +41,16 @@ test('overlay keyboard shield consumes composer typing before website shortcuts'
   assert.match(pageHook, /event\.stopPropagation\(\);[\s\S]*event\.stopImmediatePropagation\(\);/);
 });
 });
+
+test('new sessions are queued with initial diagnostics in the create request', () => {
+  const contentScript = readFile('src/contentScript.js');
+
+  assert.match(contentScript, /const initialMessage = createInitialMessage\(prompt, diagnosticsBundle\.payload\);/);
+  assert.match(contentScript, /const initialImages = \[imageFromScreenshot\(diagnosticsBundle\.screenshotDataUrl, 'initial-page-screenshot\.png'\)\];/);
+  assert.match(contentScript, /createSession\(state\.selectedProjectId, metadata, \{\s*task: initialMessage,\s*images: initialImages,\s*\}\)/);
+  assert.doesNotMatch(
+    contentScript,
+    /await sendStreamMessage\(\s*created\.id,\s*createInitialMessage\(prompt, diagnosticsBundle\.payload\)/,
+    'queued session creation must not immediately start the session stream',
+  );
+});

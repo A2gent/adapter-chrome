@@ -234,15 +234,17 @@
         has_focus_annotation: Boolean(diagnosticsBundle.payload.focus_annotation),
         focus_annotation_count: diagnosticsBundle.payload.focus_annotation?.annotation_count || diagnosticsBundle.payload.focus_annotation?.stroke_count || 0,
       };
-      const created = await createSession(state.selectedProjectId, metadata);
-      setState({ sessionId: created.id, status: 'Sending diagnostics to agent...' });
+      // WHY: Brute serial-queued sessions start from their saved first user message.
+      // WHAT: include diagnostics in the create request instead of immediately opening a stream.
+      const initialMessage = createInitialMessage(prompt, diagnosticsBundle.payload);
+      const initialImages = [imageFromScreenshot(diagnosticsBundle.screenshotDataUrl, 'initial-page-screenshot.png')];
+      const created = await createSession(state.selectedProjectId, metadata, {
+        task: initialMessage,
+        images: initialImages,
+      });
+      setState({ sessionId: created.id, status: 'Session queued in Brute' });
       appendMessage('user', prompt);
-      await sendStreamMessage(
-        created.id,
-        createInitialMessage(prompt, diagnosticsBundle.payload),
-        [imageFromScreenshot(diagnosticsBundle.screenshotDataUrl, 'initial-page-screenshot.png')],
-      );
-      setState({ busy: false, status: 'Session ready', followup: '' });
+      setState({ busy: false, status: 'Session queued', followup: '' });
     } catch (error) {
       setState({ busy: false, status: 'Error', error: error instanceof Error ? error.message : String(error) });
     }

@@ -144,7 +144,11 @@ test('createSession uses the active provider and listProjects uses the projects 
 
   const client = caesarApi.createApiClient({ getBaseUrl: () => 'http://127.0.0.1:5445/' });
 
-  assert.deepEqual(await client.createSession('', { source: 'adapter-chrome' }), { id: 'session-1' });
+  const initialImages = [{ name: 'screen.png', media_type: 'image/png', data_base64: 'abc' }];
+  assert.deepEqual(
+    await client.createSession('', { source: 'adapter-chrome' }, { task: 'Initial prompt', images: initialImages }),
+    { id: 'session-1' },
+  );
   assert.deepEqual(await client.listProjects(), [{ id: 'project-1' }]);
 
   assert.equal(messages[0].path, '/providers');
@@ -153,6 +157,10 @@ test('createSession uses the active provider and listProjects uses the projects 
   assert.deepEqual(JSON.parse(messages[1].options.body), {
     agent_id: 'build',
     provider: 'openai_codex',
+    task: 'Initial prompt',
+    images: initialImages,
+    queued: true,
+    queue_mode: 'serial',
     metadata: { source: 'adapter-chrome' },
   });
   assert.equal(messages[2].path, '/projects');
@@ -171,13 +179,42 @@ test('createSession falls back to server-side provider resolution when providers
 
   const client = caesarApi.createApiClient({ getBaseUrl: () => 'http://127.0.0.1:5445/' });
 
-  assert.deepEqual(await client.createSession('project-1', { source: 'adapter-chrome' }), { id: 'session-1' });
+  assert.deepEqual(await client.createSession('project-1', { source: 'adapter-chrome' }, { task: 'Initial prompt' }), { id: 'session-1' });
 
   assert.equal(messages[0].path, '/providers');
   assert.equal(messages[1].path, '/sessions');
   assert.deepEqual(JSON.parse(messages[1].options.body), {
     agent_id: 'build',
     project_id: 'project-1',
+    task: 'Initial prompt',
+    queued: true,
+    queue_mode: 'serial',
+    metadata: { source: 'adapter-chrome' },
+  });
+});
+
+test('createSession omits blank tasks but preserves images for queued creation', async (t) => {
+  const { runtime, messages } = createRuntimeMock({
+    sendResponse(message) {
+      if (message.path === '/providers') {
+        return { ok: true, response: { ok: true, status: 200, body: [] } };
+      }
+      return { ok: true, response: { ok: true, status: 200, body: { id: 'session-1' } } };
+    },
+  });
+  withChrome(t, { runtime });
+
+  const client = caesarApi.createApiClient({ getBaseUrl: () => 'http://127.0.0.1:5445/' });
+  const images = [{ name: 'screen.png', media_type: 'image/png', data_base64: 'abc' }];
+
+  await client.createSession('project-1', { source: 'adapter-chrome' }, { task: '   ', images });
+
+  assert.deepEqual(JSON.parse(messages[1].options.body), {
+    agent_id: 'build',
+    project_id: 'project-1',
+    images,
+    queued: true,
+    queue_mode: 'serial',
     metadata: { source: 'adapter-chrome' },
   });
 });
