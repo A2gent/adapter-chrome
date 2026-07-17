@@ -1,5 +1,5 @@
 const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
-const DEFAULT_CAESAR_BASE_URL = 'http://localhost:5173';
+const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
 const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
 
 const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;

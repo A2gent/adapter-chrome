@@ -244,7 +244,7 @@ test('background handles screenshot, default base URL, and session tab messages'
     assert.equal(background.onMessage({ type: 'A2GENT_OPEN_SESSION_DETAIL', sessionId: 'session/with spaces' }, {}, resolve), true);
   });
   assert.deepEqual(toPlain(openedSession), { ok: true });
-  assert.deepEqual(toPlain(background.calls.createdTabs), [{ url: 'http://localhost:5173/chat/session%2Fwith%20spaces' }]);
+  assert.deepEqual(toPlain(background.calls.createdTabs), [{ url: 'https://my.a2gent.net/chat/session%2Fwith%20spaces' }]);
 });
 
 test('background injects content scripts when action toggle misses the tab', async () => {

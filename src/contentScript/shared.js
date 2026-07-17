@@ -8,7 +8,7 @@
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, () => {
   const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
-  const DEFAULT_CAESAR_BASE_URL = 'http://localhost:5173';
+  const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
@@ -35,7 +35,7 @@
   const nowIso = () => new Date().toISOString();
 
   // WHY: sessions are persisted in Brute, but users inspect them in Caesar's browser UI.
-  // WHAT: build the local Caesar chat/session-detail URL opened by the Open Session button.
+  // WHAT: build the hosted Caesar chat/session-detail URL opened by the Open Session button.
   const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
 
   const storageGet = (key) => new Promise((resolve) => {

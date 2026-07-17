@@ -57,7 +57,7 @@ test('serializeApiOptions keeps only proxy-safe fetch fields', () => {
 test('buildSessionDetailUrl encodes Caesar session route ids', () => {
   assert.equal(
     shared.buildSessionDetailUrl('session/with spaces'),
-    'http://localhost:5173/chat/session%2Fwith%20spaces',
+    'https://my.a2gent.net/chat/session%2Fwith%20spaces',
   );
 });
 
