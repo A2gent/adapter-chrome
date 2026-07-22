@@ -14,6 +14,8 @@
   const CURSOR_WIDTH_PX = 24;
   const CURSOR_HEIGHT_PX = 35;
   const POLL_TIMEOUT_MS = 25000;
+  const HIDDEN_POLL_TIMEOUT_MS = 100;
+  const HIDDEN_POLL_INTERVAL_MS = 5000;
   const POLL_RETRY_MS = 1500;
   const MAX_TEXT = 60000;
   const MAX_HTML = 180000;
@@ -350,6 +352,7 @@
       cancelable: true,
       composed: true,
     });
+    const accepted = target.dispatchEvent(event);
     return accepted !== false && !event.defaultPrevented;
   };
 
@@ -585,25 +588,31 @@
 
   const pollLoop = async () => {
     for (;;) {
+      const hidden = document.visibilityState === 'hidden';
       try {
         const response = await apiFetch(`/browser-extension/pages/${encodeURIComponent(pageId)}/poll`, {
           method: 'POST',
           body: JSON.stringify({
             client_id: clientId,
             extension_version: EXTENSION_VERSION,
-            timeout_ms: POLL_TIMEOUT_MS,
+            timeout_ms: hidden ? HIDDEN_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
             page: pageSnapshot(),
           }),
         });
         const command = response?.command;
-        if (!command?.id) {
-          continue;
+        if (command?.id) {
+          try {
+            const result = await executeCommand(command);
+            await postCommandResult(command.id, { ok: true, result });
+          } catch (error) {
+            await postCommandResult(command.id, { ok: false, error: error instanceof Error ? error.message : String(error) });
+          }
         }
-        try {
-          const result = await executeCommand(command);
-          await postCommandResult(command.id, { ok: true, result });
-        } catch (error) {
-          await postCommandResult(command.id, { ok: false, error: error instanceof Error ? error.message : String(error) });
+        // WHY: every open tab previously held a 25-second localhost connection, exhausting
+        // Chrome's per-origin pool and making foreground requests such as /projects wait.
+        // WHAT: hidden tabs briefly check their queued commands, then release the socket.
+        if (hidden) {
+          await sleep(HIDDEN_POLL_INTERVAL_MS);
         }
       } catch {
         await sleep(POLL_RETRY_MS);

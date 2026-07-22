@@ -26,6 +26,7 @@ test('overlay composers submit on Enter and reserve Shift+Enter for newlines', (
   assert.match(contentScript, /if \(role === 'followup'\) \{\n\s+void sendFollowup\(\);/);
   assert.match(contentUi, /Start a new chat\.\.\. Enter to send, Shift\+Enter for newline\./);
   assert.match(contentUi, /Follow up\. Enter to send, Shift\+Enter for newline\./);
+});
 
 test('overlay keyboard shield consumes composer typing before website shortcuts', () => {
   const overlayFocus = readFile('src/contentScript/overlayFocus.js');
@@ -39,7 +40,6 @@ test('overlay keyboard shield consumes composer typing before website shortcuts'
 
   assert.match(overlayFocus, /event\.stopPropagation\(\);[\s\S]*event\.stopImmediatePropagation\(\);/);
   assert.match(pageHook, /event\.stopPropagation\(\);[\s\S]*event\.stopImmediatePropagation\(\);/);
-});
 });
 
 test('new sessions are queued with initial diagnostics in the create request', () => {

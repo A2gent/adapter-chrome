@@ -222,8 +222,10 @@ const proxiedResponse = (body, status = 200) => ({
   },
 });
 
-const loadBridge = ({ commands = [], diagnosticsPayload } = {}) => {
+const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visible', emptyPollResponses = 0 } = {}) => {
   const document = createDocumentMock();
+  document.visibilityState = visibilityState;
+  let remainingEmptyPollResponses = emptyPollResponses;
   const listeners = new Map();
   const runtimeMessages = [];
   const resultPosts = [];
@@ -329,6 +331,11 @@ const loadBridge = ({ commands = [], diagnosticsPayload } = {}) => {
               return undefined;
             }
             if (/\/browser-extension\/pages\/[^/]+\/poll/.test(apiPath)) {
+              if (remainingEmptyPollResponses > 0) {
+                remainingEmptyPollResponses -= 1;
+                queueMicrotask(() => callback(proxiedResponse({ command: null })));
+                return undefined;
+              }
               if (commands.length === 0) {
                 return undefined;
               }
@@ -398,6 +405,21 @@ const loadBridge = ({ commands = [], diagnosticsPayload } = {}) => {
   return { document, runtimeMessages, resultPosts, waitForResults };
 };
 
+test('hidden pages release long-poll connections between short command checks', async () => {
+  const { runtimeMessages } = loadBridge({ visibilityState: 'hidden', emptyPollResponses: 1 });
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const pollMessage = runtimeMessages.find((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path));
+  assert.ok(pollMessage, 'hidden page should still check for queued browser-control commands');
+  assert.equal(JSON.parse(pollMessage.options.body).timeout_ms, 100);
+  assert.equal(
+    runtimeMessages.filter((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path)).length,
+    1,
+    'hidden page should wait before opening its next poll connection',
+  );
+});
+
 test('browser control bridge exposes required agent command actions', () => {
   const bridge = readFile('src/browserControlBridge.js');
 
@@ -449,6 +471,8 @@ test('browser control bridge executes polled commands and posts structured resul
 
   assert.equal(runtimeMessages[0].type, 'A2GENT_BRUTE_API_FETCH');
   assert.equal(runtimeMessages[0].path, '/browser-extension/pages/register');
+  const pollMessage = runtimeMessages.find((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path));
+  assert.equal(JSON.parse(pollMessage.options.body).timeout_ms, 25000);
 
   assert.equal(byId.text.ok, true);
   assert.equal(byId.text.result.text, 'Visible body text for the bridge.');
