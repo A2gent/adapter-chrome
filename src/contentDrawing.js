@@ -5,6 +5,9 @@
 
   const { createAnnotation, summarizeAnnotations } = window.__A2GENT_DRAWING_ANNOTATION__ || {};
   const ROOT_ID = 'a2gent-browser-adapter-drawing-root';
+  // WHY: element-mode uses window capture listeners that would otherwise steal clicks
+  // from the main task composer (higher z-index panel) while annotation tools stay active.
+  const OVERLAY_ROOT_ID = 'a2gent-browser-adapter-root';
   const CHANGE_EVENT = 'A2GENT_DRAWING_CHANGED';
   const DEFAULT_TOOL = 'region';
   const TOOLS = ['arrow', 'region', 'element'];
@@ -108,6 +111,10 @@
       const element = document.elementFromPoint(clientX, clientY);
       if (!element || element === document.documentElement || element === document.body) return null;
       if (element === host || host.contains(element)) return null;
+      // Never treat the main adapter panel as a page target for Element tool picks.
+      if (element.id === OVERLAY_ROOT_ID || (typeof element.closest === 'function' && element.closest(`#${OVERLAY_ROOT_ID}`))) {
+        return null;
+      }
       return element;
     } finally {
       host.style.pointerEvents = previousHostPointerEvents;
@@ -129,11 +136,13 @@
 
   const isDrawingUiEvent = (event) => {
     const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-    return path.some((node) => (
-      node
-      && typeof node.closest === 'function'
-      && node.closest('[data-role="annotation-editor"], [data-role="toolbar"], [data-role="annotation-marker"]')
-    ));
+    return path.some((node) => {
+      if (!node) return false;
+      // Keep the main prompt/follow-up textarea focusable while Element tool is active.
+      if (node.id === OVERLAY_ROOT_ID) return true;
+      return typeof node.closest === 'function'
+        && Boolean(node.closest('[data-role="annotation-editor"], [data-role="toolbar"], [data-role="annotation-marker"]'));
+    });
   };
 
   const updateElementPreviewFromPoint = (clientX, clientY) => {
@@ -446,8 +455,33 @@
   const applyVisibility = () => {
     if (!host) return;
     const visible = enabled || annotations.length > 0 || Boolean(drag);
-    host.style.display = visible ? 'block' : 'none';
-    host.style.pointerEvents = visible ? 'auto' : 'none';
+    const sharedApi = window.__A2GENT_CONTENT_SCRIPT_SHARED__;
+    // WHY: annotation chrome must stay above page max-z-index UI while remaining under the chat panel.
+    // WHAT: promote via shared top-layer helper (popover / max z-index), keep below the chat host.
+    if (typeof sharedApi?.setOverlayHostTopLayer === 'function') {
+      sharedApi.setOverlayHostTopLayer(host, visible, {
+        zIndex: sharedApi.DRAWING_TOP_LAYER_Z_INDEX || 2147483646,
+        pointerEvents: visible ? 'auto' : 'none',
+      });
+      // Keep the chat panel above the drawing surface in the shared top-layer stack.
+      const chatHost = document.getElementById('a2gent-browser-adapter-root');
+      if (visible && chatHost) {
+        try {
+          if (chatHost.matches?.(':popover-open')) {
+            sharedApi.setOverlayHostTopLayer(chatHost, true, {
+              zIndex: sharedApi.OVERLAY_TOP_LAYER_Z_INDEX || 2147483647,
+              pointerEvents: 'none',
+              raise: true,
+            });
+          }
+        } catch {
+          // Ignore when chat host cannot be re-stacked.
+        }
+      }
+    } else {
+      host.style.display = visible ? 'block' : 'none';
+      host.style.pointerEvents = visible ? 'auto' : 'none';
+    }
     if (surface) surface.style.pointerEvents = enabled ? 'auto' : 'none';
     if (shadow) {
       const toolbar = shadow.querySelector('[data-role="toolbar"]');
@@ -482,7 +516,19 @@
     shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `
       <style>
-        :host { all: initial; }
+        :host {
+          all: initial;
+          /* WHY: popover UA styles center a bordered dialog; keep a transparent full-viewport stacking host. */
+          position: fixed;
+          inset: 0;
+          width: 100vw;
+          height: 100vh;
+          margin: 0;
+          padding: 0;
+          border: none;
+          background: transparent;
+          overflow: visible;
+        }
         .wrap { position: fixed; inset: 0; direction: ltr; unicode-bidi: isolate; text-align: left; font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
         .surface { position: absolute; inset: 0; z-index: 1; cursor: crosshair; touch-action: none; }
         .surface.is-element-tool { cursor: cell; }

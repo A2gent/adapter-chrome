@@ -157,3 +157,62 @@ test('normalizeMessages tolerates missing or malformed message history before su
   assert.equal(normalized[1].content, 42);
   assert.match(normalized[1].timestamp, /^\d{4}-\d{2}-\d{2}T/);
 });
+
+test('setOverlayHostTopLayer promotes hosts via popover when available', () => {
+  const calls = [];
+  const host = {
+    style: {},
+    _popover: '',
+    _open: false,
+    hasAttribute(name) {
+      return name === 'popover' && Boolean(this._popover);
+    },
+    setAttribute(name, value) {
+      if (name === 'popover') this._popover = value;
+    },
+    matches(selector) {
+      return selector === ':popover-open' && this._open;
+    },
+    showPopover() {
+      this._open = true;
+      calls.push('show');
+    },
+    hidePopover() {
+      this._open = false;
+      calls.push('hide');
+    },
+  };
+
+  shared.setOverlayHostTopLayer(host, true, { zIndex: 7, pointerEvents: 'none' });
+  assert.equal(host._popover, 'manual');
+  assert.deepEqual(calls, ['show']);
+  assert.equal(host.style.zIndex, '7');
+  assert.equal(host.style.pointerEvents, 'none');
+  assert.equal(host.style.position, 'fixed');
+  assert.equal(host.style.inset, '0');
+
+  shared.setOverlayHostTopLayer(host, true, { raise: true });
+  assert.deepEqual(calls, ['show', 'hide', 'show']);
+
+  shared.setOverlayHostTopLayer(host, false);
+  assert.deepEqual(calls, ['show', 'hide', 'show', 'hide']);
+  assert.equal(host.style.display, 'none');
+});
+
+test('setOverlayHostTopLayer falls back to display toggle without popover', () => {
+  const host = {
+    style: {},
+    hasAttribute() {
+      return false;
+    },
+    setAttribute() {},
+  };
+
+  shared.setOverlayHostTopLayer(host, true, { zIndex: 3, pointerEvents: 'auto' });
+  assert.equal(host.style.display, 'block');
+  assert.equal(host.style.zIndex, '3');
+  assert.equal(host.style.pointerEvents, 'auto');
+
+  shared.setOverlayHostTopLayer(host, false);
+  assert.equal(host.style.display, 'none');
+});

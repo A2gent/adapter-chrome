@@ -162,7 +162,12 @@
     const shadow = getShadow();
     const state = getState();
     if (!host || !shadow) return;
-    host.style.display = state.open ? 'block' : 'none';
+    // WHY: high page z-index / stacking contexts can cover a plain shadow panel and steal focus.
+    // WHAT: promote the host into the browser top layer (popover) or max fixed z-index fallback.
+    shared.setOverlayHostTopLayer(host, state.open, {
+      zIndex: shared.OVERLAY_TOP_LAYER_Z_INDEX,
+      pointerEvents: 'none',
+    });
     host.style.setProperty('--a2gent-overlay-height', `${state.overlayHeight}px`);
     applyOverlayLayout(host, state, shadow);
     if (!state.open) return;

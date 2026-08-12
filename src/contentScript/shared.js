@@ -117,6 +117,88 @@
       timestamp: message.timestamp || nowIso(),
     }));
 
+  const OVERLAY_TOP_LAYER_Z_INDEX = 2147483647;
+  const DRAWING_TOP_LAYER_Z_INDEX = 2147483646;
+
+  const isPopoverOpen = (host) => {
+    try {
+      return Boolean(host?.matches?.(':popover-open'));
+    } catch {
+      return false;
+    }
+  };
+
+  // WHY: page UI with max z-index / stacking contexts can sit above a shadow panel and steal clicks/focus.
+  // WHAT: prefer Popover top layer (beats any document z-index); fall back to fixed max z-index hosts.
+  const setOverlayHostTopLayer = (host, open, {
+    zIndex = OVERLAY_TOP_LAYER_Z_INDEX,
+    pointerEvents = 'none',
+    raise = false,
+  } = {}) => {
+    if (!host) return;
+
+    host.style.position = 'fixed';
+    host.style.inset = '0';
+    host.style.width = '100vw';
+    host.style.height = '100vh';
+    host.style.margin = '0';
+    host.style.padding = '0';
+    host.style.border = 'none';
+    host.style.background = 'transparent';
+    host.style.overflow = 'visible';
+    host.style.zIndex = String(zIndex);
+    host.style.pointerEvents = open ? pointerEvents : 'none';
+
+    const canPopover = typeof host.showPopover === 'function' && typeof host.hidePopover === 'function';
+    if (canPopover) {
+      if (!host.hasAttribute('popover')) {
+        host.setAttribute('popover', 'manual');
+      }
+      try {
+        if (open) {
+          if (isPopoverOpen(host)) {
+            // WHY: later showPopover calls stay under earlier top-layer entries; hide+show re-stacks above them.
+            if (raise) {
+              const shadowActive = host.shadowRoot?.activeElement || null;
+              let selection = null;
+              if (shadowActive && typeof shadowActive.selectionStart === 'number') {
+                selection = {
+                  start: shadowActive.selectionStart,
+                  end: shadowActive.selectionEnd,
+                  direction: shadowActive.selectionDirection || 'none',
+                };
+              }
+              host.hidePopover();
+              host.showPopover();
+              if (shadowActive && typeof shadowActive.focus === 'function') {
+                shadowActive.focus({ preventScroll: true });
+                if (selection && typeof shadowActive.setSelectionRange === 'function') {
+                  const valueLength = String(shadowActive.value || '').length;
+                  shadowActive.setSelectionRange(
+                    Math.min(selection.start, valueLength),
+                    Math.min(selection.end, valueLength),
+                    selection.direction,
+                  );
+                }
+              }
+            }
+          } else {
+            host.showPopover();
+          }
+          host.style.display = '';
+        } else if (isPopoverOpen(host)) {
+          host.hidePopover();
+        }
+      } catch {
+        // Ignore InvalidStateError when the host is not connected yet.
+      }
+      if (!open) host.style.display = 'none';
+      return;
+    }
+
+    host.style.display = open ? 'block' : 'none';
+  };
+
   return {
     DEFAULT_BRUTE_BASE_URL,
     DEFAULT_CAESAR_BASE_URL,
@@ -134,6 +216,8 @@
     COMPACT_OVERLAY_HEIGHT,
     COMPACT_OVERLAY_MIN_HEIGHT,
     EXPANDED_OVERLAY_MIN_HEIGHT,
+    OVERLAY_TOP_LAYER_Z_INDEX,
+    DRAWING_TOP_LAYER_Z_INDEX,
     clip,
     nowIso,
     buildSessionDetailUrl,
@@ -144,5 +228,6 @@
     sendRuntimeMessage,
     upsertAnnotationReferenceText,
     normalizeMessages,
+    setOverlayHostTopLayer,
   };
 });

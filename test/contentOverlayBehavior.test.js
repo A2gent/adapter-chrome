@@ -39,6 +39,22 @@ test('overlay rendering is isolated from RTL pages', () => {
   assert.match(contentDrawing, /\.wrap \{[\s\S]*direction: ltr;[\s\S]*unicode-bidi: isolate;/);
 });
 
+test('overlay hosts promote to top layer so high page z-index cannot steal focus', () => {
+  const sharedSource = readFile('src/contentScript/shared.js');
+  const renderWiring = readFile('src/contentScript/renderWiring.js');
+  const contentUi = readFile('src/contentUi.js');
+  const contentDrawing = readFile('src/contentDrawing.js');
+
+  assert.match(sharedSource, /const setOverlayHostTopLayer = /);
+  assert.match(sharedSource, /showPopover/);
+  assert.match(sharedSource, /popover',\s*'manual'/);
+  assert.match(renderWiring, /shared\.setOverlayHostTopLayer\(host,\s*state\.open/);
+  assert.match(contentDrawing, /setOverlayHostTopLayer\(/);
+  assert.match(contentDrawing, /raise:\s*true/);
+  assert.match(contentUi, /:host \{[\s\S]*pointer-events:\s*none;/);
+  assert.match(contentUi, /\.panel \{[\s\S]*pointer-events:\s*auto;/);
+});
+
 test('annotation reference text is synchronized only after committed editor submit', () => {
   const contentScript = readFile('src/contentScript.js');
 

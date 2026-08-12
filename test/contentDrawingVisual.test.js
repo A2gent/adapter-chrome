@@ -36,6 +36,16 @@ test('annotation tools include precise DOM element selection with red highlight'
   assert.match(source, /cursor:\s*cell;/);
 });
 
+test('element mode window capture ignores the main adapter composer overlay', () => {
+  // WHY: capture-phase window listeners in element mode must not steal focus from the
+  // task textarea; switching to Rectangle previously worked only because those listeners
+  // early-return when activeTool !== 'element'.
+  assert.match(source, /const OVERLAY_ROOT_ID = 'a2gent-browser-adapter-root';/);
+  assert.match(source, /if \(node\.id === OVERLAY_ROOT_ID\) return true;/);
+  assert.match(source, /window\.addEventListener\('pointerdown',[\s\S]*isDrawingUiEvent\(event\)/);
+  assert.match(source, /window\.addEventListener\('pointermove',[\s\S]*isDrawingUiEvent\(event\)/);
+});
+
 test('annotation editor commits reference text only when Done is clicked', () => {
   assert.match(source, /updateAnnotationText\(annotation\.number, event\.target\.value, \{ emit: false \}\)/);
   assert.match(source, /emitChange\(\{ committedReference: \{ number: committed\.number, type: committed\.type, text: committed\.text \} \}\)/);

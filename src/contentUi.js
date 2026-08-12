@@ -56,7 +56,21 @@
   `;
 
   const renderStyles = ({ compactOverlayHeight, compactOverlayMinHeight, expandedOverlayMinHeight }) => `
-    :host { all: initial; --a2gent-overlay-height: ${compactOverlayHeight}px; }
+    :host {
+      all: initial;
+      --a2gent-overlay-height: ${compactOverlayHeight}px;
+      /* WHY: popover UA styles center a bordered dialog; we only need transparent top-layer stacking. */
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: transparent;
+      overflow: visible;
+      pointer-events: none;
+    }
     * { box-sizing: border-box; }
     .panel {
       position: fixed;
@@ -68,6 +82,7 @@
       min-height: ${compactOverlayMinHeight}px;
       max-height: 640px;
       z-index: 2147483647;
+      pointer-events: auto;
       display: flex;
       flex-direction: column;
       gap: 10px;
