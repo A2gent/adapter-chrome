@@ -407,6 +407,15 @@
     return annotation || null;
   };
 
+  const focusTextarea = (textarea) => {
+    if (!textarea || typeof textarea.focus !== 'function') return;
+    textarea.focus({ preventScroll: true });
+    if (typeof textarea.setSelectionRange === 'function') {
+      const end = String(textarea.value || '').length;
+      textarea.setSelectionRange(end, end);
+    }
+  };
+
   const openEditor = (annotation) => {
     closeTooltip();
     closeEditor();
@@ -423,6 +432,7 @@
         <textarea data-role="annotation-text" rows="4" placeholder="Example: resize this button">${escapeHtml(annotation.text)}</textarea>
       </label>
       <div class="editor-actions">
+        <button type="button" data-role="annotation-focus" aria-label="Focus annotation text" title="Focus text area">Focus</button>
         <button type="button" data-role="annotation-delete" class="danger">Delete</button>
         <button type="button" data-role="annotation-done" class="primary">Done</button>
       </div>
@@ -430,6 +440,11 @@
     shadow.querySelector('.wrap')?.appendChild(editor);
     const textarea = editor.querySelector('[data-role="annotation-text"]');
     textarea?.addEventListener('input', (event) => updateAnnotationText(annotation.number, event.target.value, { emit: false }));
+    editor.querySelector('[data-role="annotation-focus"]')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      focusTextarea(textarea);
+    });
     editor.querySelector('[data-role="annotation-delete"]')?.addEventListener('click', (event) => {
       event.preventDefault();
       annotations = annotations.filter((item) => item.number !== annotation.number);
@@ -448,8 +463,7 @@
       }
       closeEditor();
     });
-    textarea?.focus({ preventScroll: true });
-    textarea?.setSelectionRange(String(textarea.value || '').length, String(textarea.value || '').length);
+    focusTextarea(textarea);
   };
 
   const applyVisibility = () => {

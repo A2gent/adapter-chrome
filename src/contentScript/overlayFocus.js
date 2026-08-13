@@ -67,6 +67,15 @@
     return snapshot.role ? snapshot : null;
   };
 
+  const focusTextarea = (textarea) => {
+    if (!textarea || typeof textarea.focus !== 'function') return;
+    textarea.focus({ preventScroll: true });
+    if (typeof textarea.setSelectionRange === 'function') {
+      const end = String(textarea.value || '').length;
+      textarea.setSelectionRange(end, end);
+    }
+  };
+
   const focusOverlayControl = (shadow, state, role, selection = null) => {
     if (!state?.open || !shadow || !role) return;
     const target = shadow.querySelector(`[data-role="${role}"]`);
@@ -140,6 +149,7 @@
     isFocusableOverlayControl,
     isOverlayEvent,
     readOverlayFocusSnapshot,
+    focusTextarea,
     focusOverlayControl,
     restoreOverlayFocusSnapshot,
     isOverlayRoleFocused,

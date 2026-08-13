@@ -46,6 +46,12 @@ test('element mode window capture ignores the main adapter composer overlay', ()
   assert.match(source, /window\.addEventListener\('pointermove',[\s\S]*isDrawingUiEvent\(event\)/);
 });
 
+test('annotation editor exposes a button that restores textarea focus', () => {
+  assert.match(source, /data-role="annotation-focus"[\s\S]*aria-label="Focus annotation text"/);
+  assert.match(source, /focusTextarea\(textarea\)/);
+  assert.match(source, /\[data-role="annotation-focus"\][\s\S]*addEventListener\('click'/);
+});
+
 test('annotation editor commits reference text only when Done is clicked', () => {
   assert.match(source, /updateAnnotationText\(annotation\.number, event\.target\.value, \{ emit: false \}\)/);
   assert.match(source, /emitChange\(\{ committedReference: \{ number: committed\.number, type: committed\.type, text: committed\.text \} \}\)/);

@@ -25,6 +25,7 @@
   const renderCreation = (state) => `
     <section class="create-composer" aria-label="Create a new A2gent session">
       <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat... Enter to send, Shift+Enter for newline.">${escapeHtml(state.prompt)}</textarea>
+      <button type="button" data-role="focus-composer" data-target="prompt" class="focus-button" aria-label="Focus new chat text" title="Focus text area">Focus</button>
       <button
         type="button"
         data-role="create"
@@ -45,6 +46,7 @@
     <section class="messages">${messages}</section>
     <section class="followup-row">
       <textarea data-role="followup" placeholder="Follow up. Enter to send, Shift+Enter for newline.">${escapeHtml(state.followup)}</textarea>
+      <button type="button" data-role="focus-composer" data-target="followup" class="focus-button" aria-label="Focus follow-up text" title="Focus text area">Focus</button>
       <div class="actions continuation-actions">
         <button type="button" data-role="open-session" class="secondary">Open Session</button>
         <button type="button" data-role="recapture" class="secondary" ${state.busy ? 'disabled' : ''}>
@@ -164,6 +166,12 @@
     button.ghost.active-drawing { border-color: rgba(255, 209, 102, .86); color: #ffe7a6; }
     button.ghost.danger { border-color: rgba(255, 95, 86, .52); color: #ffb4b4; }
     button.ghost:hover, button.secondary:hover { background: rgba(255,255,255,.16); }
+    button.focus-button {
+      align-self: center;
+      border: 1px solid rgba(155, 181, 220, 0.28);
+      background: rgba(84, 119, 166, 0.34);
+    }
+    button.focus-button:hover { background: rgba(84, 119, 166, 0.56); }
     .status { margin-left: 0; color: #9fc0f0; font-size: 12px; }
     .status.error { color: #ffb4b4; }
     .warning {
@@ -180,7 +188,7 @@
     .detection.default strong { color: #f7dfaa; }
     .create-composer {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 48px;
+      grid-template-columns: minmax(0, 1fr) auto 48px;
       gap: 12px;
       align-items: center;
       flex: 0 0 auto;
@@ -245,9 +253,9 @@
     .message-role { font-size: 11px; color: #9fb1c7; margin-bottom: 3px; text-transform: uppercase; }
     .message pre { margin: 0; white-space: pre-wrap; color: #eef5ff; font: inherit; }
     .empty { color: #8fa1b9; }
-    .followup-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+    .followup-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
     .followup-row textarea { min-height: 88px; }
-    .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
+    .continuation-actions { grid-column: 1 / -1; justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
       .panel {
         width: min(var(--a2gent-overlay-width, 100vw), calc(100vw - var(--a2gent-overlay-left, 0px)));
@@ -257,7 +265,7 @@
       .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
       .header-actions button { width: auto; }
-      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 76px; }
+      .create-composer { grid-template-columns: minmax(0, 1fr) auto 44px; gap: 8px; min-height: 76px; }
       .create-composer textarea { height: 74px; min-height: 74px; padding: 13px 15px; font-size: 15px; }
       .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
       .send-icon { width: 28px; height: 28px; }
