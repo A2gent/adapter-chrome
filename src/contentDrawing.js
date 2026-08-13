@@ -407,15 +407,6 @@
     return annotation || null;
   };
 
-  const focusTextarea = (textarea) => {
-    if (!textarea || typeof textarea.focus !== 'function') return;
-    textarea.focus({ preventScroll: true });
-    if (typeof textarea.setSelectionRange === 'function') {
-      const end = String(textarea.value || '').length;
-      textarea.setSelectionRange(end, end);
-    }
-  };
-
   const openEditor = (annotation) => {
     closeTooltip();
     closeEditor();
@@ -432,7 +423,6 @@
         <textarea data-role="annotation-text" rows="4" placeholder="Example: resize this button">${escapeHtml(annotation.text)}</textarea>
       </label>
       <div class="editor-actions">
-        <button type="button" data-role="annotation-focus" aria-label="Focus annotation text" title="Focus text area">Focus</button>
         <button type="button" data-role="annotation-delete" class="danger">Delete</button>
         <button type="button" data-role="annotation-done" class="primary">Done</button>
       </div>
@@ -440,11 +430,6 @@
     shadow.querySelector('.wrap')?.appendChild(editor);
     const textarea = editor.querySelector('[data-role="annotation-text"]');
     textarea?.addEventListener('input', (event) => updateAnnotationText(annotation.number, event.target.value, { emit: false }));
-    editor.querySelector('[data-role="annotation-focus"]')?.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      focusTextarea(textarea);
-    });
     editor.querySelector('[data-role="annotation-delete"]')?.addEventListener('click', (event) => {
       event.preventDefault();
       annotations = annotations.filter((item) => item.number !== annotation.number);
@@ -463,7 +448,8 @@
       }
       closeEditor();
     });
-    focusTextarea(textarea);
+    textarea?.focus({ preventScroll: true });
+    textarea?.setSelectionRange(String(textarea.value || '').length, String(textarea.value || '').length);
   };
 
   const applyVisibility = () => {
@@ -474,20 +460,18 @@
     // WHAT: promote via shared top-layer helper (popover / max z-index), keep below the chat host.
     if (typeof sharedApi?.setOverlayHostTopLayer === 'function') {
       sharedApi.setOverlayHostTopLayer(host, visible, {
-        zIndex: sharedApi.DRAWING_TOP_LAYER_Z_INDEX || 2147483646,
+        zIndex: sharedApi.DRAWING_TOP_LAYER_Z_INDEX || 2147483647,
         pointerEvents: visible ? 'auto' : 'none',
       });
       // Keep the chat panel above the drawing surface in the shared top-layer stack.
       const chatHost = document.getElementById('a2gent-browser-adapter-root');
       if (visible && chatHost) {
         try {
-          if (chatHost.matches?.(':popover-open')) {
-            sharedApi.setOverlayHostTopLayer(chatHost, true, {
-              zIndex: sharedApi.OVERLAY_TOP_LAYER_Z_INDEX || 2147483647,
-              pointerEvents: 'none',
-              raise: true,
-            });
-          }
+          sharedApi.setOverlayHostTopLayer(chatHost, true, {
+            zIndex: sharedApi.OVERLAY_TOP_LAYER_Z_INDEX || 2147483647,
+            pointerEvents: 'none',
+            raise: true,
+          });
         } catch {
           // Ignore when chat host cannot be re-stacked.
         }

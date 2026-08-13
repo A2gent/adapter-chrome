@@ -199,6 +199,33 @@ test('setOverlayHostTopLayer promotes hosts via popover when available', () => {
   assert.equal(host.style.display, 'none');
 });
 
+test('setOverlayHostTopLayer keeps an open host last in the document root', () => {
+  const appended = [];
+  const root = {
+    lastElementChild: null,
+    appendChild(node) {
+      appended.push(node);
+      this.lastElementChild = node;
+      node.parentNode = this;
+    },
+  };
+  const host = {
+    style: {},
+    ownerDocument: { documentElement: root },
+    parentNode: { id: 'page-container' },
+    hasAttribute() {
+      return false;
+    },
+    setAttribute() {},
+  };
+
+  shared.setOverlayHostTopLayer(host, true);
+
+  assert.deepEqual(appended, [host]);
+  assert.equal(root.lastElementChild, host);
+  assert.equal(host.style.zIndex, '2147483647');
+});
+
 test('setOverlayHostTopLayer falls back to display toggle without popover', () => {
   const host = {
     style: {},

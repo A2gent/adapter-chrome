@@ -92,15 +92,6 @@
     shadow.querySelector('[data-role="followup"]')?.addEventListener('input', (event) => {
       getState().followup = event.target.value;
     });
-    shadow.querySelectorAll('[data-role="focus-composer"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const role = button.getAttribute('data-target');
-        const textarea = role ? shadow.querySelector(`[data-role="${role}"]`) : null;
-        focus.focusTextarea(textarea);
-      });
-    });
     shadow.querySelector('[data-role="create"]')?.addEventListener('click', () => void startSession());
     shadow.querySelectorAll('[data-role="drawing-toggle"]').forEach((button) => button.addEventListener('click', () => toggleDrawing()));
     shadow.querySelectorAll('[data-role="drawing-cancel"]').forEach((button) => button.addEventListener('click', () => cancelDrawing()));
@@ -176,6 +167,7 @@
     shared.setOverlayHostTopLayer(host, state.open, {
       zIndex: shared.OVERLAY_TOP_LAYER_Z_INDEX,
       pointerEvents: 'none',
+      raise: state.open,
     });
     host.style.setProperty('--a2gent-overlay-height', `${state.overlayHeight}px`);
     applyOverlayLayout(host, state, shadow);

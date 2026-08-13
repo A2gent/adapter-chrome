@@ -117,24 +117,6 @@ test('existing session view treats malformed message history as empty', () => {
   assert.match(html, /No inline messages yet\. Create a session to start\./);
 });
 
-test('composer textareas expose buttons that restore keyboard focus', () => {
-  const creationHtml = renderOverlay({
-    state: baseState(),
-    compactOverlayHeight: 176,
-    compactOverlayMinHeight: 144,
-    expandedOverlayMinHeight: 360,
-  });
-  const continuationHtml = renderOverlay({
-    state: baseState({ sessionId: 'session-1' }),
-    compactOverlayHeight: 176,
-    compactOverlayMinHeight: 144,
-    expandedOverlayMinHeight: 360,
-  });
-
-  assert.match(creationHtml, /data-role="focus-composer" data-target="prompt"[\s\S]*aria-label="Focus new chat text"/);
-  assert.match(continuationHtml, /data-role="focus-composer" data-target="followup"[\s\S]*aria-label="Focus follow-up text"/);
-});
-
 test('overlay panel is movable and composer textareas are taller', () => {
   const html = renderOverlay({
     state: baseState(),

@@ -48,8 +48,12 @@ test('overlay hosts promote to top layer so high page z-index cannot steal focus
   assert.match(sharedSource, /const setOverlayHostTopLayer = /);
   assert.match(sharedSource, /showPopover/);
   assert.match(sharedSource, /popover',\s*'manual'/);
-  assert.match(renderWiring, /shared\.setOverlayHostTopLayer\(host,\s*state\.open/);
-  assert.match(contentDrawing, /setOverlayHostTopLayer\(/);
+  assert.match(sharedSource, /const DRAWING_TOP_LAYER_Z_INDEX = OVERLAY_TOP_LAYER_Z_INDEX/);
+  assert.match(sharedSource, /const root = host\.ownerDocument\?\.documentElement/);
+  assert.match(sharedSource, /root\.appendChild\(host\)/);
+  assert.match(renderWiring, /shared\.setOverlayHostTopLayer\(host,\s*state\.open[\s\S]*raise:\s*state\.open/);
+  assert.match(contentDrawing, /DRAWING_TOP_LAYER_Z_INDEX \|\| 2147483647/);
+  assert.match(contentDrawing, /setOverlayHostTopLayer\(chatHost, true/);
   assert.match(contentDrawing, /raise:\s*true/);
   assert.match(contentUi, /:host \{[\s\S]*pointer-events:\s*none;/);
   assert.match(contentUi, /\.panel \{[\s\S]*pointer-events:\s*auto;/);

@@ -118,7 +118,7 @@
     }));
 
   const OVERLAY_TOP_LAYER_Z_INDEX = 2147483647;
-  const DRAWING_TOP_LAYER_Z_INDEX = 2147483646;
+  const DRAWING_TOP_LAYER_Z_INDEX = OVERLAY_TOP_LAYER_Z_INDEX;
 
   const isPopoverOpen = (host) => {
     try {
@@ -136,6 +136,13 @@
     raise = false,
   } = {}) => {
     if (!host) return;
+
+    const root = host.ownerDocument?.documentElement;
+    if (open && root && (host.parentNode !== root || root.lastElementChild !== host)) {
+      // WHY: fallback stacking at equal/max z-index follows DOM order.
+      // WHAT: keep injected extension chrome as the last direct child of the page root.
+      root.appendChild(host);
+    }
 
     host.style.position = 'fixed';
     host.style.inset = '0';

@@ -3,30 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { focusTextarea } = require('../src/contentScript/overlayFocus.js');
-
 const repoRoot = path.resolve(__dirname, '..');
 const readFile = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 
-test('focus textarea helper prevents scrolling and moves the cursor to the end', () => {
-  const calls = [];
-  const textarea = {
-    value: 'existing text',
-    focus: (options) => calls.push(['focus', options]),
-    setSelectionRange: (start, end) => calls.push(['selection', start, end]),
-  };
-
-  focusTextarea(textarea);
-
-  assert.deepEqual(calls, [
-    ['focus', { preventScroll: true }],
-    ['selection', 13, 13],
-  ]);
-});
-
 test('overlay composers submit on Enter and reserve Shift+Enter for newlines', () => {
   const contentScript = readFile('src/contentScript.js');
-  const renderWiring = readFile('src/contentScript/renderWiring.js');
   const overlayFocus = readFile('src/contentScript/overlayFocus.js');
   const pageHook = readFile('src/pageHook.js');
   const contentUi = readFile('src/contentUi.js');
@@ -45,10 +26,6 @@ test('overlay composers submit on Enter and reserve Shift+Enter for newlines', (
   assert.match(contentScript, /if \(role === 'followup'\) \{\n\s+void sendFollowup\(\);/);
   assert.match(contentUi, /Start a new chat\.\.\. Enter to send, Shift\+Enter for newline\./);
   assert.match(contentUi, /Follow up\. Enter to send, Shift\+Enter for newline\./);
-  assert.match(contentUi, /data-role="focus-composer" data-target="prompt"/);
-  assert.match(contentUi, /data-role="focus-composer" data-target="followup"/);
-  assert.match(renderWiring, /\[data-role="focus-composer"\]/);
-  assert.match(renderWiring, /focus\.focusTextarea\(textarea\)/);
 });
 
 test('overlay keyboard shield consumes composer typing before website shortcuts', () => {
