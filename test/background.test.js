@@ -247,6 +247,17 @@ test('background handles screenshot, default base URL, and session tab messages'
   assert.deepEqual(toPlain(background.calls.createdTabs), [{ url: 'https://my.a2gent.net/chat/session%2Fwith%20spaces' }]);
 });
 
+test('background allows toggling the overlay on local file pages', async () => {
+  const background = loadBackground();
+
+  await background.onActionClick({ id: 123, url: 'file:///tmp/local-design.html' });
+
+  assert.deepEqual(toPlain(background.calls.sendMessages), [{
+    tabId: 123,
+    message: { type: 'A2GENT_TOGGLE_OVERLAY' },
+  }]);
+});
+
 test('background injects content scripts when action toggle misses the tab', async () => {
   const background = loadBackground({
     async sendMessage(tabId, message, callNumber) {

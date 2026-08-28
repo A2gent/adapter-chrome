@@ -21,7 +21,8 @@ Features:
 2. Open Chrome `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select this `adapter-chrome` directory.
-5. Navigate to any `http://` or `https://` page and click the extension icon. The in-page bottom overlay toggles open/closed.
+5. In the extension details, enable **Allow access to file URLs** if you want to use the adapter on local `file:///...` pages. Chrome keeps this permission disabled until you explicitly opt in.
+6. Navigate to any `http://`, `https://`, or enabled `file://` page and click the extension icon. The in-page bottom overlay toggles open/closed.
 
 <img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
 

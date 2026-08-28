@@ -8,6 +8,12 @@ const manifest = require('../manifest.json');
 
 const exists = (relativePath) => fs.existsSync(path.join(repoRoot, relativePath));
 
+test('manifest content scripts support web pages and local files', () => {
+  for (const entry of manifest.content_scripts) {
+    assert.deepEqual(entry.matches, ['http://*/*', 'https://*/*', 'file:///*']);
+  }
+});
+
 test('manifest content scripts reference bundled files in load order', () => {
   const scriptFiles = manifest.content_scripts.flatMap((entry) => entry.js || []);
 
@@ -43,12 +49,11 @@ test('background fallback injection includes all isolated content helpers before
   );
 });
 
-
 test('manifest exposes the virtual cursor image to content-injected page DOM', () => {
   assert.deepEqual(manifest.web_accessible_resources, [
     {
       resources: ['cursor.png'],
-      matches: ['http://*/*', 'https://*/*'],
+      matches: ['http://*/*', 'https://*/*', 'file:///*'],
     },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');

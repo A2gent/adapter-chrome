@@ -169,7 +169,7 @@ const streamBruteResponseToPort = async (port, message) => {
 };
 
 chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id || !tab.url || !/^https?:\/\//i.test(tab.url)) {
+  if (!tab.id || !tab.url || !/^(?:https?|file):\/\//i.test(tab.url)) {
     return;
   }
 
