@@ -117,7 +117,7 @@ test('existing session view treats malformed message history as empty', () => {
   assert.match(html, /No inline messages yet\. Create a session to start\./);
 });
 
-test('overlay panel is movable and composer textareas are taller', () => {
+test('overlay panel is movable and gives session history more space', () => {
   const html = renderOverlay({
     state: baseState(),
     compactOverlayHeight: 176,
@@ -130,5 +130,6 @@ test('overlay panel is movable and composer textareas are taller', () => {
   assert.match(html, /width: min\(var\(--a2gent-overlay-width/);
   assert.match(html, /header \{[\s\S]*cursor: move;/);
   assert.match(html, /\.create-composer textarea \{[\s\S]*height: 82px;[\s\S]*min-height: 82px;/);
-  assert.match(html, /\.followup-row textarea \{ min-height: 88px; \}/);
+  assert.match(html, /\.followup-row textarea \{ min-height: 72px; \}/);
+  assert.match(html, /data-role="close" class="ghost icon-button" aria-label="Close" title="Close"[\s\S]*<svg class="close-icon"[\s\S]*<path d="M5 5l14 14M19 5L5 19"/);
 });

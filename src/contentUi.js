@@ -161,6 +161,16 @@
     button.secondary { background: rgba(84, 119, 166, 0.42); }
     button.secondary.active { background: #ffd166; color: #111827; font-weight: 700; }
     button.ghost { background: transparent; border: 1px solid rgba(255,255,255,.16); }
+    .icon-button {
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .close-icon { width: 18px; height: 18px; }
     button.ghost.active-drawing { border-color: rgba(255, 209, 102, .86); color: #ffe7a6; }
     button.ghost.danger { border-color: rgba(255, 95, 86, .52); color: #ffb4b4; }
     button.ghost:hover, button.secondary:hover { background: rgba(255,255,255,.16); }
@@ -246,7 +256,7 @@
     .message pre { margin: 0; white-space: pre-wrap; color: #eef5ff; font: inherit; }
     .empty { color: #8fa1b9; }
     .followup-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
-    .followup-row textarea { min-height: 88px; }
+    .followup-row textarea { min-height: 72px; }
     .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
       .panel {
@@ -332,7 +342,11 @@
             <button type="button" data-role="settings-toggle" class="ghost" aria-expanded="${state.settingsOpen ? 'true' : 'false'}">
               ${state.settingsOpen ? 'Hide settings' : 'Settings'}
             </button>
-            <button type="button" data-role="close" class="ghost">Close</button>
+            <button type="button" data-role="close" class="ghost icon-button" aria-label="Close" title="Close">
+              <svg class="close-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+                <path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+              </svg>
+            </button>
           </div>
         </header>
         ${settingsPanel}
