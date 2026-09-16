@@ -168,8 +168,8 @@ caesar and brute project repos are in ~/git/a2gent/ folder
 
 ## Implementation notes
 - Implemented MVP across `adapter-chrome`, `caesar`, and `brute` in the current implementation session.
-- Extension overlay now keeps the saved local Brute/agent URL and project-context controls hidden by default; **Settings** must be opened explicitly to view/change them, refresh projects, or save a new URL, and successful URL saves close the settings panel again.
-- The extension now defaults new sessions to Brute's seeded `Knowledge Base` system project (`system-kb`) whenever URL-pattern auto-detection does not produce a unique project; URL auto-detected projects still take precedence and users can override from Settings.
+- Extension overlay now keeps the saved local Brute/agent URL hidden by default; **Settings** must be opened explicitly to view/change it, and successful URL saves close the settings panel again. Project context is selected in the new-session creation form.
+- The extension now defaults new sessions to Brute's seeded `Knowledge Base` system project (`system-kb`) whenever URL-pattern auto-detection does not produce a unique project; URL auto-detected projects still take precedence and users can override from the new-session form.
 - The default unopened-session overlay now uses a compact Caesar-like composer: one prompt textarea with a circular send-icon button, no visible long diagnostics button text, no drag-and-drop image affordance, and no workflow selector.
 - The broad diagnostic-bundle disclosure now lives inside the explicitly opened **Settings** panel instead of the default overlay view.
 - Continuation mode no longer displays the raw `Session: ...` ID label; it provides an **Open Session** button that opens the Caesar `/chat/{sessionId}` detail view in a browser tab, and the **Full recapture & send** action sits in the continuation buttons row.

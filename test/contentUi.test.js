@@ -52,16 +52,10 @@ test('drawing header reflects active drawing state and disables cancellation whi
   assert.match(html, /data-role="drawing-cancel"[\s\S]*disabled>Clear annotations<\/button>/);
 });
 
-test('settings panel renders escaped project controls when explicitly opened', () => {
+test('settings panel renders escaped connection controls when explicitly opened', () => {
   const html = renderOverlay({
     state: baseState({
       baseUrl: 'http://localhost:5445/?x=<script>',
-      projectDetection: { mode: 'auto', label: 'Matched <repo>', detail: '' },
-      projects: [
-        { id: 'project-1', name: 'Safe project' },
-        { id: 'project-<2>', name: 'Important <Project>' },
-      ],
-      selectedProjectId: 'project-<2>',
       settingsOpen: true,
     }),
     compactOverlayHeight: 160,
@@ -72,6 +66,31 @@ test('settings panel renders escaped project controls when explicitly opened', (
   assert.match(html, /<section class="settings-panel" aria-label="Adapter settings">/);
   assert.match(html, /data-role="settings-toggle"[\s\S]*aria-expanded="true"[\s\S]*Hide settings/);
   assert.match(html, /value="http:\/\/localhost:5445\/\?x=&lt;script&gt;"/);
+  const settingsStart = html.indexOf('<section class="settings-panel"');
+  const createStart = html.indexOf('<section class="create-panel"');
+  const settingsOnly = settingsStart >= 0 && createStart > settingsStart
+    ? html.slice(settingsStart, createStart)
+    : html;
+  assert.doesNotMatch(settingsOnly, /data-role="project"/);
+  assert.doesNotMatch(html, /<script>/);
+});
+
+test('session creation form renders escaped project controls', () => {
+  const html = renderOverlay({
+    state: baseState({
+      projectDetection: { mode: 'auto', label: 'Matched <repo>', detail: '' },
+      projects: [
+        { id: 'project-1', name: 'Safe project' },
+        { id: 'project-<2>', name: 'Important <Project>' },
+      ],
+      selectedProjectId: 'project-<2>',
+    }),
+    compactOverlayHeight: 160,
+    compactOverlayMinHeight: 120,
+    expandedOverlayMinHeight: 360,
+  });
+
+  assert.match(html, /<section class="create-panel" aria-label="Create a new A2gent session">/);
   assert.match(html, /<option value="project-&lt;2&gt;" selected>Important &lt;Project&gt;<\/option>/);
   assert.match(html, /<div class="detection auto">[\s\S]*<strong>Matched &lt;repo&gt;<\/strong>[\s\S]*<span>Important &lt;Project&gt;<\/span>/);
   assert.doesNotMatch(html, /<script>|<repo>|<Project>/);

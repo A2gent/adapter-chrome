@@ -22,22 +22,42 @@
     `;
   };
 
-  const renderCreation = (state) => `
-    <section class="create-composer" aria-label="Create a new A2gent session">
-      <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat... Enter to send, Shift+Enter for newline.">${escapeHtml(state.prompt)}</textarea>
-      <button
-        type="button"
-        data-role="create"
-        class="primary send-button ${state.busy ? 'is-busy' : ''}"
-        aria-label="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
-        title="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
-        ${state.busy ? 'disabled' : ''}
-      >
-        <span class="visually-hidden">${state.busy ? 'Working...' : 'Create session and send diagnostics'}</span>
-        <svg class="send-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-          <path d="M3.7 20.3 21 12 3.7 3.7l1.4 6.1L14 12l-8.9 2.2-1.4 6.1Z" fill="currentColor"></path>
-        </svg>
-      </button>
+  const renderProjectContext = (state, selectedProject, projectOptions) => `
+    <div class="project-row">
+      <label>
+        <span>Project context</span>
+        <select data-role="project">
+          <option value="">Select project...</option>
+          ${projectOptions}
+        </select>
+      </label>
+      <button type="button" data-role="refresh-projects" class="secondary">Refresh projects</button>
+      <div class="detection ${state.projectDetection.mode}">
+        <strong>${escapeHtml(state.projectDetection.label)}</strong>
+        <span>${escapeHtml(state.projectDetection.detail || (selectedProject ? selectedProject.name : ''))}</span>
+      </div>
+    </div>
+  `;
+
+  const renderCreation = (state, selectedProject, projectOptions) => `
+    <section class="create-panel" aria-label="Create a new A2gent session">
+      ${renderProjectContext(state, selectedProject, projectOptions)}
+      <section class="create-composer">
+        <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat... Enter to send, Shift+Enter for newline.">${escapeHtml(state.prompt)}</textarea>
+        <button
+          type="button"
+          data-role="create"
+          class="primary send-button ${state.busy ? 'is-busy' : ''}"
+          aria-label="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
+          title="${state.busy ? 'Creating session' : 'Create session and send diagnostics'}"
+          ${state.busy ? 'disabled' : ''}
+        >
+          <span class="visually-hidden">${state.busy ? 'Working...' : 'Create session and send diagnostics'}</span>
+          <svg class="send-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+            <path d="M3.7 20.3 21 12 3.7 3.7l1.4 6.1L14 12l-8.9 2.2-1.4 6.1Z" fill="currentColor"></path>
+          </svg>
+        </button>
+      </section>
     </section>
   `;
 
@@ -188,6 +208,11 @@
     .detection strong { color: #e9f0fb; font-size: 12px; }
     .detection.auto strong { color: #9ff0c1; }
     .detection.default strong { color: #f7dfaa; }
+    .create-panel {
+      display: grid;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
     .create-composer {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 48px;
@@ -274,10 +299,10 @@
     }
   `;
 
-  const renderSettingsPanel = (state, selectedProject, projectOptions) => {
+  const renderSettingsPanel = (state) => {
     if (!state.settingsOpen) return '';
-    // WHY: connection and project setup are advanced controls, not the primary diagnosis action.
-    // WHAT: render them only after the user explicitly opens Settings.
+    // WHY: connection setup is an advanced control, not the primary diagnosis action.
+    // WHAT: render it only after the user explicitly opens Settings.
     return `
       <section class="settings-panel" aria-label="Adapter settings">
         <section class="warning">
@@ -289,20 +314,6 @@
             <input data-role="base-url" value="${escapeHtml(state.baseUrl)}" placeholder="http://localhost:5445" />
           </label>
           <button type="button" data-role="save-base-url" class="secondary">Save URL</button>
-        </div>
-        <div class="project-row">
-          <label>
-            <span>Project context</span>
-            <select data-role="project">
-              <option value="">Select project...</option>
-              ${projectOptions}
-            </select>
-          </label>
-          <button type="button" data-role="refresh-projects" class="secondary">Refresh projects</button>
-          <div class="detection ${state.projectDetection.mode}">
-            <strong>${escapeHtml(state.projectDetection.label)}</strong>
-            <span>${escapeHtml(state.projectDetection.detail || (selectedProject ? selectedProject.name : ''))}</span>
-          </div>
         </div>
       </section>
     `;
@@ -326,7 +337,7 @@
       `<option value="${escapeHtml(project.id)}" ${project.id === state.selectedProjectId ? 'selected' : ''}>${escapeHtml(project.name)}</option>`
     )).join('');
     const messages = renderMessages(Array.isArray(state.messages) ? state.messages : []);
-    const settingsPanel = renderSettingsPanel(state, selectedProject, projectOptions);
+    const settingsPanel = renderSettingsPanel(state);
 
     return `
       <style>${renderStyles({ compactOverlayHeight, compactOverlayMinHeight, expandedOverlayMinHeight })}</style>
@@ -350,7 +361,7 @@
           </div>
         </header>
         ${settingsPanel}
-        ${state.sessionId ? renderContinuation(state, messages) : renderCreation(state)}
+        ${state.sessionId ? renderContinuation(state, messages) : renderCreation(state, selectedProject, projectOptions)}
       </div>
     `;
   };

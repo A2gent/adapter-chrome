@@ -23,8 +23,8 @@
   // WHY: the unopened-session overlay should behave like Caesar's compact composer
   // instead of covering a large part of the current browser page.
   // WHAT: use a short default/minimum height and expand only for settings/history views.
-  const COMPACT_OVERLAY_HEIGHT = 176;
-  const COMPACT_OVERLAY_MIN_HEIGHT = 144;
+  const COMPACT_OVERLAY_HEIGHT = 220;
+  const COMPACT_OVERLAY_MIN_HEIGHT = 200;
   const EXPANDED_OVERLAY_MIN_HEIGHT = 240;
 
   const clip = (value, max) => {
