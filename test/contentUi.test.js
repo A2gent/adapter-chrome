@@ -7,6 +7,7 @@ const baseState = (overrides = {}) => ({
   baseUrl: 'http://localhost:5445',
   busy: false,
   drawingEnabled: false,
+  drawingTool: 'region',
   error: '',
   followup: '',
   hasDrawing: false,
@@ -38,6 +39,27 @@ test('annotation action renders in header before settings', () => {
   assert.ok(drawIndex < settingsIndex, 'Draw focus should sit next to Settings in the header');
   assert.ok(settingsIndex < composerIndex, 'Header actions should render above the composer textarea');
   assert.doesNotMatch(html, /class="drawing-tools"/);
+  assert.doesNotMatch(html, /data-role="drawing-tools"/);
+});
+
+test('active annotation tools render inside the movable dialog below the header', () => {
+  const html = renderOverlay({
+    state: baseState({ drawingEnabled: true, drawingTool: 'element' }),
+    compactOverlayHeight: 160,
+    compactOverlayMinHeight: 120,
+    expandedOverlayMinHeight: 360,
+  });
+
+  const headerEnd = html.indexOf('</header>');
+  const toolsIndex = html.indexOf('data-role="drawing-tools"');
+  const composerIndex = html.indexOf('class="create-composer"');
+  assert.ok(headerEnd > 0 && toolsIndex > headerEnd, 'Tool selection should sit below the dialog header');
+  assert.ok(toolsIndex < composerIndex, 'Tool selection should stay above the composer');
+  assert.match(html, /class="drawing-tools"/);
+  assert.match(html, /data-tool="arrow" aria-pressed="false">Arrow<\/button>/);
+  assert.match(html, /data-tool="region" aria-pressed="false">Rectangle<\/button>/);
+  assert.match(html, /data-tool="element" aria-pressed="true">Element<\/button>/);
+  assert.match(html, /data-role="drawing-hint"/);
 });
 
 test('drawing header reflects active drawing state and disables cancellation while busy', () => {

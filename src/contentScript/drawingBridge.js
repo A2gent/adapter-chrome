@@ -18,6 +18,7 @@
     setRawState({
       ...getState(),
       drawingEnabled: Boolean(drawingOverlay.isEnabled?.()),
+      drawingTool: drawingOverlay.getActiveTool?.() || getState().drawingTool || 'region',
       hasDrawing: Boolean(drawingOverlay.hasAnnotations?.() ?? drawingOverlay.hasStrokes?.()),
       drawingStrokeCount: annotationCountFromSummary(summary),
     });
@@ -53,6 +54,12 @@
 
   const getDrawingSummary = () => getDrawingOverlay()?.getSummary?.() || null;
 
+  const setDrawingTool = (tool) => {
+    const drawingOverlay = getDrawingOverlay();
+    if (!drawingOverlay) return;
+    drawingOverlay.setTool(tool);
+  };
+
   return {
     getDrawingOverlay,
     syncDrawingState,
@@ -61,5 +68,6 @@
     enableDrawingInput,
     disableDrawingInput,
     getDrawingSummary,
+    setDrawingTool,
   };
 });

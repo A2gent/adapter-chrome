@@ -15,12 +15,27 @@ test('opening the adapter overlay enters annotation mode immediately', () => {
   assert.match(contentScript, /if \(nextOpen\) \{[\s\S]*enableDrawingInput\(\);[\s\S]*\}/);
 });
 
+test('render wiring routes dialog tool buttons to the drawing overlay', () => {
+  const renderWiring = readFile('src/contentScript/renderWiring.js');
+  const drawingBridge = readFile('src/contentScript/drawingBridge.js');
+  const contentScript = readFile('src/contentScript.js');
+
+  assert.match(renderWiring, /setDrawingTool/);
+  assert.match(renderWiring, /shadow\.querySelectorAll\('\[data-tool\]'\)/);
+  assert.match(drawingBridge, /drawingOverlay\.setTool\(tool\)/);
+  assert.match(drawingBridge, /drawingTool: drawingOverlay\.getActiveTool/);
+  assert.match(contentScript, /drawingTool: detail\.activeTool/);
+  assert.match(contentScript, /setDrawingTool,/);
+});
+
 test('render wiring supports dragging the overlay panel independently of resizing', () => {
   const renderWiring = readFile('src/contentScript/renderWiring.js');
 
   assert.match(renderWiring, /const clampOverlayPosition = /);
   assert.match(renderWiring, /const applyOverlayLayout = /);
-  assert.match(renderWiring, /const dragHandle = shadow\.querySelector\('header'\);/);
+  assert.match(renderWiring, /const startPanelDrag = \(event\) => \{/);
+  assert.match(renderWiring, /shadow\.querySelector\('header'\)\?\.addEventListener\('pointerdown', startPanelDrag\)/);
+  assert.match(renderWiring, /shadow\.querySelector\('\[data-role="drawing-tools"\]'\)\?\.addEventListener\('pointerdown', startPanelDrag\)/);
   assert.match(renderWiring, /left: startPosition\.left \+ \(moveEvent\.clientX - startX\)/);
   assert.match(renderWiring, /bottom: startPosition\.bottom - \(moveEvent\.clientY - startY\)/);
   assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-left'/);

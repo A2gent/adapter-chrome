@@ -16,15 +16,15 @@ test('annotation shapes render non-obscuring regions and 10px arrow target circl
 test('annotation overlay defaults to rectangle mode', () => {
   assert.match(source, /const DEFAULT_TOOL = 'region';/);
   assert.match(source, /activeTool = DEFAULT_TOOL;/);
-  assert.match(source, /data-tool="arrow" aria-pressed="false">Arrow/);
-  assert.match(source, /data-tool="region" aria-pressed="true">Rectangle/);
+  assert.match(source, /getActiveTool\(\) \{\s*return activeTool;/);
 });
 
 test('annotation tools include precise DOM element selection with red highlight', () => {
   assert.match(source, /const DEFAULT_TOOL = 'region';/);
   assert.match(source, /const TOOLS = \['arrow', 'region', 'element'\];/);
   assert.match(source, /if \(!TOOLS\.includes\(tool\)\) return;/);
-  assert.match(source, /data-tool="element" aria-pressed="false">Element/);
+  assert.doesNotMatch(source, /data-role="toolbar"/);
+  assert.doesNotMatch(source, /data-tool="arrow"/);
   assert.match(source, /\.surface\s*\{[\s\S]*z-index:\s*1;[\s\S]*cursor:\s*crosshair;/);
   assert.match(source, /\.shape-layer\s*\{\s*z-index:\s*2;\s*\}/);
   assert.match(source, /\.element-rect\s*\{[\s\S]*fill:\s*rgba\(255, 59, 48, 0\.10\);[\s\S]*stroke:\s*#ff3b30;[\s\S]*stroke-width:\s*2;/);

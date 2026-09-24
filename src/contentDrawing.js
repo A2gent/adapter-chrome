@@ -141,7 +141,7 @@
       // Keep the main prompt/follow-up textarea focusable while Element tool is active.
       if (node.id === OVERLAY_ROOT_ID) return true;
       return typeof node.closest === 'function'
-        && Boolean(node.closest('[data-role="annotation-editor"], [data-role="toolbar"], [data-role="annotation-marker"]'));
+        && Boolean(node.closest('[data-role="annotation-editor"], [data-role="annotation-marker"]'));
     });
   };
 
@@ -323,28 +323,9 @@
     `;
   };
 
-  const renderToolState = () => {
-    if (!shadow) return;
-    shadow.querySelectorAll('[data-tool]').forEach((button) => {
-      const isActive = button.getAttribute('data-tool') === activeTool;
-      button.classList.toggle('active', isActive);
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-    const hint = shadow.querySelector('[data-role="hint"]');
-    if (hint) {
-      const hints = {
-        region: 'Drag to draw a numbered rectangle. Add text in the popup; only the number appears in screenshots.',
-        arrow: 'Drag an arrow toward the element. Add text in the popup; only the number appears in screenshots.',
-        element: 'Move the cursor and click a DOM element. It will be highlighted with a precise 2px red border.',
-      };
-      hint.textContent = hints[activeTool] || hints.region;
-    }
-  };
-
   const redraw = () => {
     renderShapes();
     renderMarkers();
-    renderToolState();
   };
 
   const scheduleRedraw = () => {
@@ -481,13 +462,7 @@
       host.style.pointerEvents = visible ? 'auto' : 'none';
     }
     if (surface) surface.style.pointerEvents = enabled ? 'auto' : 'none';
-    if (shadow) {
-      const toolbar = shadow.querySelector('[data-role="toolbar"]');
-      const hint = shadow.querySelector('[data-role="hint"]');
-      if (toolbar) toolbar.hidden = !enabled;
-      if (hint) hint.hidden = !enabled;
-      if (surface) surface.classList.toggle('is-element-tool', enabled && activeTool === 'element');
-    }
+    if (surface) surface.classList.toggle('is-element-tool', enabled && activeTool === 'element');
   };
 
   const setTool = (tool) => {
@@ -596,22 +571,6 @@
           overflow-wrap: anywhere;
           pointer-events: none;
         }
-        .toolbar {
-          position: fixed;
-          top: 12px;
-          left: 50%;
-          z-index: 4;
-          display: flex;
-          gap: 7px;
-          align-items: center;
-          transform: translateX(-50%);
-          padding: 7px;
-          border-radius: 999px;
-          background: rgba(17, 24, 39, .92);
-          box-shadow: 0 8px 24px rgba(0,0,0,.28);
-          pointer-events: auto;
-        }
-        .toolbar button,
         .editor-actions button {
           border: 0;
           border-radius: 999px;
@@ -621,25 +580,8 @@
           cursor: pointer;
           font: inherit;
         }
-        .toolbar button.active,
         .editor-actions button.primary { background: #ffd166; color: #111827; font-weight: 800; }
         .editor-actions button.danger { background: rgba(255, 95, 86, .22); color: #ffb4b4; }
-        .hint {
-          position: fixed;
-          top: 62px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 3;
-          max-width: min(620px, calc(100vw - 32px));
-          padding: 7px 11px;
-          border-radius: 999px;
-          color: #111827;
-          background: rgba(255, 209, 102, 0.95);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
-          font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          pointer-events: none;
-          user-select: none;
-        }
         .annotation-editor {
           position: fixed;
           z-index: 5;
@@ -674,27 +616,13 @@
         <div class="surface" data-role="surface" aria-label="A2gent numbered annotation surface"></div>
         <div class="shape-layer" data-role="shape-layer"></div>
         <div class="marker-layer" data-role="marker-layer"></div>
-        <div class="toolbar" data-role="toolbar" hidden>
-          <button type="button" data-tool="arrow" aria-pressed="false">Arrow</button>
-          <button type="button" data-tool="region" aria-pressed="true">Rectangle</button>
-          <button type="button" data-tool="element" aria-pressed="false">Element</button>
-        </div>
-        <div class="hint" data-role="hint" hidden></div>
       </div>
     `;
     surface = shadow.querySelector('[data-role="surface"]');
 
-    shadow.querySelectorAll('[data-tool]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setTool(button.getAttribute('data-tool'));
-      });
-    });
-
     surface.addEventListener('pointerdown', (event) => {
       if (!enabled || event.button !== 0) return;
-      if (event.target?.closest?.('[data-role="annotation-editor"], [data-role="toolbar"], [data-role="annotation-marker"]')) return;
+      if (event.target?.closest?.('[data-role="annotation-editor"], [data-role="annotation-marker"]')) return;
       event.preventDefault();
       event.stopPropagation();
       closeEditor();
@@ -819,6 +747,9 @@
     },
     clear,
     setTool,
+    getActiveTool() {
+      return activeTool;
+    },
     isEnabled() {
       return enabled;
     },

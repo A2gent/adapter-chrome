@@ -68,6 +68,7 @@
     openSessionDetail,
     toggleDrawing,
     cancelDrawing,
+    setDrawingTool,
     disableDrawingInput,
     submitOverlayComposer,
   }) => {
@@ -95,6 +96,13 @@
     shadow.querySelector('[data-role="create"]')?.addEventListener('click', () => void startSession());
     shadow.querySelectorAll('[data-role="drawing-toggle"]').forEach((button) => button.addEventListener('click', () => toggleDrawing()));
     shadow.querySelectorAll('[data-role="drawing-cancel"]').forEach((button) => button.addEventListener('click', () => cancelDrawing()));
+    shadow.querySelectorAll('[data-tool]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setDrawingTool?.(button.getAttribute('data-tool'));
+      });
+    });
     shadow.querySelector('[data-role="send"]')?.addEventListener('click', () => void sendFollowup());
     shadow.querySelector('[data-role="recapture"]')?.addEventListener('click', () => void sendFullRecapture());
     shadow.querySelector('[data-role="open-session"]')?.addEventListener('click', () => openSessionDetail());
@@ -129,8 +137,7 @@
       window.addEventListener('pointerup', onUp);
     });
 
-    const dragHandle = shadow.querySelector('header');
-    dragHandle?.addEventListener('pointerdown', (event) => {
+    const startPanelDrag = (event) => {
       if (event.button !== 0) return;
       if (event.target?.closest?.('button, input, select, textarea, a, [data-role="resize"]')) return;
       event.preventDefault();
@@ -154,7 +161,9 @@
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
-    });
+    };
+    shadow.querySelector('header')?.addEventListener('pointerdown', startPanelDrag);
+    shadow.querySelector('[data-role="drawing-tools"]')?.addEventListener('pointerdown', startPanelDrag);
   };
 
   const render = ({ getHost, getShadow, getState, attachEvents, readOverlayFocusSnapshot, restoreOverlayFocusSnapshot, consumeShouldFocusPrimaryControl, focusPrimaryControl }) => {

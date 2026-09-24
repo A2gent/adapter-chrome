@@ -6,6 +6,34 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+  const DRAWING_TOOLS = [
+    { id: 'arrow', label: 'Arrow', hint: 'Drag an arrow. Notes stay in the popup; screenshots show only the number.' },
+    { id: 'region', label: 'Rectangle', hint: 'Drag a rectangle. Notes stay in the popup; screenshots show only the number.' },
+    { id: 'element', label: 'Element', hint: 'Click a page element to highlight it with a precise red border.' },
+  ];
+
+  const activeDrawingTool = (state) => (
+    DRAWING_TOOLS.some((tool) => tool.id === state.drawingTool) ? state.drawingTool : 'region'
+  );
+
+  const renderDrawingTools = (state) => {
+    // WHY: the previous floating toolbar sat at the top of the page and could not move with the dialog.
+    // WHAT: keep Arrow/Rectangle/Element inside the adapter panel so dragging the dialog moves the tools.
+    if (!state.drawingEnabled) return '';
+    const toolId = activeDrawingTool(state);
+    const hint = DRAWING_TOOLS.find((tool) => tool.id === toolId)?.hint || DRAWING_TOOLS[1].hint;
+    return `
+      <div class="drawing-tools" data-role="drawing-tools">
+        <div class="drawing-tool-buttons">
+          ${DRAWING_TOOLS.map((tool) => `
+            <button type="button" data-tool="${tool.id}" aria-pressed="${tool.id === toolId ? 'true' : 'false'}">${tool.label}</button>
+          `).join('')}
+        </div>
+        <span class="drawing-hint" data-role="drawing-hint">${hint}</span>
+      </div>
+    `;
+  };
+
   const renderDrawingHeaderActions = (state) => {
     const drawLabel = state.drawingEnabled ? 'Done annotating' : (state.hasDrawing ? 'Add annotation' : 'Annotate');
     return `
@@ -129,6 +157,28 @@
       user-select: none;
       touch-action: none;
     }
+    .drawing-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+    }
+    .drawing-tool-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .drawing-tools button {
+      border-radius: 999px;
+      padding: 6px 11px;
+      cursor: pointer;
+    }
+    .drawing-tools button[aria-pressed="true"] {
+      background: #ffd166;
+      color: #111827;
+      font-weight: 800;
+    }
+    .drawing-hint { color: #9fb1c7; font-size: 12px; min-width: 0; flex: 1 1 180px; }
     header textarea,
     header input,
     header select,
@@ -291,7 +341,7 @@
       }
       .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
-      .header-actions button { width: auto; }
+      .header-actions button, .drawing-tools button { width: auto; }
       .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 76px; }
       .create-composer textarea { height: 74px; min-height: 74px; padding: 13px 15px; font-size: 15px; }
       .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
@@ -360,6 +410,7 @@
             </button>
           </div>
         </header>
+        ${renderDrawingTools(state)}
         ${settingsPanel}
         ${state.sessionId ? renderContinuation(state, messages) : renderCreation(state, selectedProject, projectOptions)}
       </div>

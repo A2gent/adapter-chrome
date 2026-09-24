@@ -38,6 +38,7 @@
     busy: false,
     recapturing: false,
     drawingEnabled: false,
+    drawingTool: 'region',
     hasDrawing: false,
     annotationCount: 0,
     drawingStrokeCount: 0,
@@ -161,6 +162,10 @@
   const disableDrawingInput = () => {
     drawingBridge.disableDrawingInput();
     syncDrawingState();
+  };
+
+  const setDrawingTool = (tool) => {
+    drawingBridge.setDrawingTool(tool);
   };
 
   const getDrawingSummary = () => drawingBridge.getDrawingSummary();
@@ -294,6 +299,7 @@
     }
     setState({
       drawingEnabled: Boolean(detail.enabled),
+      drawingTool: detail.activeTool || state.drawingTool || 'region',
       hasDrawing: Boolean(detail.hasAnnotations ?? detail.hasStrokes),
       annotationCount: Number(detail.annotationCount ?? detail.strokeCount) || 0,
       drawingStrokeCount: Number(detail.annotationCount ?? detail.strokeCount) || 0,
@@ -348,6 +354,7 @@
     openSessionDetail,
     toggleDrawing,
     cancelDrawing,
+    setDrawingTool,
     disableDrawingInput,
     submitOverlayComposer,
   });
