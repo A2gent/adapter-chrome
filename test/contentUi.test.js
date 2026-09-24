@@ -70,8 +70,8 @@ test('drawing header reflects active drawing state and disables cancellation whi
     expandedOverlayMinHeight: 360,
   });
 
-  assert.match(html, /data-role="drawing-toggle"[\s\S]*class="ghost active-drawing"[\s\S]*aria-pressed="true"[\s\S]*disabled[\s\S]*>Done annotating<\/button>/);
-  assert.match(html, /data-role="drawing-cancel"[\s\S]*disabled>Clear annotations<\/button>/);
+  assert.match(html, /data-role="drawing-toggle"[\s\S]*class="ghost icon-button active-drawing"[\s\S]*aria-pressed="true"[\s\S]*aria-label="Done annotating"[\s\S]*disabled[\s\S]*<svg/);
+  assert.match(html, /data-role="drawing-cancel"[\s\S]*class="ghost icon-button danger"[\s\S]*aria-label="Clear annotations"[\s\S]*disabled[\s\S]*<svg/);
 });
 
 test('settings panel renders escaped connection controls when explicitly opened', () => {
@@ -86,7 +86,7 @@ test('settings panel renders escaped connection controls when explicitly opened'
   });
 
   assert.match(html, /<section class="settings-panel" aria-label="Adapter settings">/);
-  assert.match(html, /data-role="settings-toggle"[\s\S]*aria-expanded="true"[\s\S]*Hide settings/);
+  assert.match(html, /data-role="settings-toggle"[\s\S]*class="ghost icon-button"[\s\S]*aria-expanded="true"[\s\S]*aria-label="Hide settings"[\s\S]*<svg/);
   assert.match(html, /value="http:\/\/localhost:5445\/\?x=&lt;script&gt;"/);
   const settingsStart = html.indexOf('<section class="settings-panel"');
   const createStart = html.indexOf('<section class="create-panel"');
@@ -114,7 +114,9 @@ test('session creation form renders escaped project controls', () => {
 
   assert.match(html, /<section class="create-panel" aria-label="Create a new A2gent session">/);
   assert.match(html, /<option value="project-&lt;2&gt;" selected>Important &lt;Project&gt;<\/option>/);
-  assert.match(html, /<div class="detection auto">[\s\S]*<strong>Matched &lt;repo&gt;<\/strong>[\s\S]*<span>Important &lt;Project&gt;<\/span>/);
+  assert.match(html, /data-role="refresh-projects"[\s\S]*class="secondary icon-button"[\s\S]*aria-label="Refresh projects"[\s\S]*<svg/);
+  assert.match(html, /\.project-row label[\s\S]*max-width:/);
+  assert.doesNotMatch(html, /class="detection/);
   assert.doesNotMatch(html, /<script>|<repo>|<Project>/);
 });
 

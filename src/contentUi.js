@@ -16,6 +16,28 @@
     DRAWING_TOOLS.some((tool) => tool.id === state.drawingTool) ? state.drawingTool : 'region'
   );
 
+  const iconSvg = (className, pathMarkup) => `
+    <svg class="${className}" aria-hidden="true" focusable="false" viewBox="0 0 24 24">${pathMarkup}</svg>
+  `;
+
+  const ICONS = {
+    annotate: iconSvg('action-icon', '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="m13.5 6.5 3 3" fill="none" stroke="currentColor" stroke-width="2"></path>'),
+    doneAnnotating: iconSvg('action-icon', '<path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>'),
+    clearAnnotations: iconSvg('action-icon', '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>'),
+    refreshProjects: iconSvg('action-icon', '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M16 16h5v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>'),
+    settings: iconSvg('action-icon', '<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>'),
+  };
+
+  const drawingToggleLabel = (state) => {
+    if (state.drawingEnabled) return 'Done annotating';
+    if (state.hasDrawing) return 'Add annotation';
+    return 'Annotate';
+  };
+
+  const drawingToggleIcon = (state) => (
+    state.drawingEnabled ? ICONS.doneAnnotating : ICONS.annotate
+  );
+
   const renderDrawingTools = (state) => {
     // WHY: the previous floating toolbar sat at the top of the page and could not move with the dialog.
     // WHAT: keep Arrow/Rectangle/Element inside the adapter panel so dragging the dialog moves the tools.
@@ -35,17 +57,26 @@
   };
 
   const renderDrawingHeaderActions = (state) => {
-    const drawLabel = state.drawingEnabled ? 'Done annotating' : (state.hasDrawing ? 'Add annotation' : 'Annotate');
+    const toggleLabel = drawingToggleLabel(state);
     return `
       <button
         type="button"
         data-role="drawing-toggle"
-        class="ghost ${state.drawingEnabled ? 'active-drawing' : ''}"
+        class="ghost icon-button ${state.drawingEnabled ? 'active-drawing' : ''}"
         aria-pressed="${state.drawingEnabled ? 'true' : 'false'}"
+        aria-label="${escapeHtml(toggleLabel)}"
+        title="${escapeHtml(toggleLabel)}"
         ${state.busy ? 'disabled' : ''}
-      >${drawLabel}</button>
+      >${drawingToggleIcon(state)}</button>
       ${(state.drawingEnabled || state.hasDrawing) ? `
-        <button type="button" data-role="drawing-cancel" class="ghost danger" ${state.busy ? 'disabled' : ''}>Clear annotations</button>
+        <button
+          type="button"
+          data-role="drawing-cancel"
+          class="ghost icon-button danger"
+          aria-label="Clear annotations"
+          title="Clear annotations"
+          ${state.busy ? 'disabled' : ''}
+        >${ICONS.clearAnnotations}</button>
       ` : ''}
     `;
   };
@@ -59,11 +90,13 @@
           ${projectOptions}
         </select>
       </label>
-      <button type="button" data-role="refresh-projects" class="secondary">Refresh projects</button>
-      <div class="detection ${state.projectDetection.mode}">
-        <strong>${escapeHtml(state.projectDetection.label)}</strong>
-        <span>${escapeHtml(state.projectDetection.detail || (selectedProject ? selectedProject.name : ''))}</span>
-      </div>
+      <button
+        type="button"
+        data-role="refresh-projects"
+        class="secondary icon-button"
+        aria-label="Refresh projects"
+        title="Refresh projects"
+      >${ICONS.refreshProjects}</button>
     </div>
   `;
 
@@ -215,6 +248,7 @@
       background: rgba(255, 255, 255, 0.04);
     }
     .settings-row label { flex: 1 1 360px; }
+    .project-row label { flex: 0 1 220px; max-width: 220px; }
     .project-row select { min-height: 34px; }
     button {
       border: 0;
@@ -241,6 +275,7 @@
       justify-content: center;
     }
     .close-icon { width: 18px; height: 18px; }
+    .action-icon { width: 18px; height: 18px; }
     button.ghost.active-drawing { border-color: rgba(255, 209, 102, .86); color: #ffe7a6; }
     button.ghost.danger { border-color: rgba(255, 95, 86, .52); color: #ffb4b4; }
     button.ghost:hover, button.secondary:hover { background: rgba(255,255,255,.16); }
@@ -254,10 +289,6 @@
       padding: 7px 9px;
       font-size: 12px;
     }
-    .detection { flex: 1; display: grid; gap: 2px; min-width: 200px; color: #9fb1c7; }
-    .detection strong { color: #e9f0fb; font-size: 12px; }
-    .detection.auto strong { color: #9ff0c1; }
-    .detection.default strong { color: #f7dfaa; }
     .create-panel {
       display: grid;
       gap: 8px;
@@ -341,7 +372,7 @@
       }
       .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
-      .header-actions button, .drawing-tools button { width: auto; }
+      .header-actions button, .drawing-tools button, .project-row .icon-button { width: auto; }
       .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 76px; }
       .create-composer textarea { height: 74px; min-height: 74px; padding: 13px 15px; font-size: 15px; }
       .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
@@ -400,9 +431,14 @@
           </div>
           <div class="header-actions">
             ${renderDrawingHeaderActions(state)}
-            <button type="button" data-role="settings-toggle" class="ghost" aria-expanded="${state.settingsOpen ? 'true' : 'false'}">
-              ${state.settingsOpen ? 'Hide settings' : 'Settings'}
-            </button>
+            <button
+              type="button"
+              data-role="settings-toggle"
+              class="ghost icon-button"
+              aria-expanded="${state.settingsOpen ? 'true' : 'false'}"
+              aria-label="${state.settingsOpen ? 'Hide settings' : 'Settings'}"
+              title="${state.settingsOpen ? 'Hide settings' : 'Settings'}"
+            >${ICONS.settings}</button>
             <button type="button" data-role="close" class="ghost icon-button" aria-label="Close" title="Close">
               <svg class="close-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
                 <path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
