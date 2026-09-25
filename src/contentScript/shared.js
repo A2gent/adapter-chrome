@@ -10,6 +10,7 @@
   const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
   const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
+  const STORAGE_SESSION_LAUNCH_KEY = 'a2gent.adapterChrome.sessionLaunch';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
   const OVERLAY_SUBMIT_EVENT = 'a2gent-overlay-submit';
@@ -23,8 +24,8 @@
   // WHY: the unopened-session overlay should behave like Caesar's compact composer
   // instead of covering a large part of the current browser page.
   // WHAT: use a short default/minimum height and expand only for settings/history views.
-  const COMPACT_OVERLAY_HEIGHT = 220;
-  const COMPACT_OVERLAY_MIN_HEIGHT = 200;
+  const COMPACT_OVERLAY_HEIGHT = 280;
+  const COMPACT_OVERLAY_MIN_HEIGHT = 240;
   const EXPANDED_OVERLAY_MIN_HEIGHT = 240;
 
   const clip = (value, max) => {
@@ -210,6 +211,7 @@
     DEFAULT_BRUTE_BASE_URL,
     DEFAULT_CAESAR_BASE_URL,
     STORAGE_BASE_URL_KEY,
+    STORAGE_SESSION_LAUNCH_KEY,
     SOURCE,
     EXTENSION_VERSION,
     OVERLAY_SUBMIT_EVENT,

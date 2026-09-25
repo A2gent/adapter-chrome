@@ -1,13 +1,17 @@
 ((root, factory) => {
   const shared = root?.__A2GENT_CONTENT_SCRIPT_SHARED__;
-  const exported = factory(shared || require('./shared.js'));
+  const sessionLaunch = root?.__A2GENT_CONTENT_SCRIPT_SESSION_LAUNCH__;
+  const exported = factory(
+    shared || require('./shared.js'),
+    sessionLaunch || require('./sessionLaunch.js'),
+  );
   if (typeof module === 'object' && module.exports) {
     module.exports = exported;
   }
   if (root) {
     root.__A2GENT_CONTENT_SCRIPT_CAESAR_API__ = exported;
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, (shared) => {
+})(typeof globalThis !== 'undefined' ? globalThis : this, (shared, sessionLaunch) => {
   const apiErrorDetail = (response) => {
     const body = response?.body;
     return body?.error || body?.message || response?.bodyText || `${response?.status || ''} ${response?.statusText || ''}`.trim() || 'Brute request failed.';
@@ -37,37 +41,41 @@
       return response.body;
     };
 
-    const activeProviderType = async () => {
-      try {
-        const providers = await listProviders();
-        if (!Array.isArray(providers)) return '';
-        const activeProvider = providers.find((provider) => provider?.is_active === true);
-        return typeof activeProvider?.type === 'string' ? activeProvider.type.trim() : '';
-      } catch {
-        return '';
-      }
-    };
-
     const createSession = async (projectId, metadata, options = {}) => {
-      const provider = await activeProviderType();
-      const images = Array.isArray(options.images) ? options.images : [];
+      const agent = options.agent || sessionLaunch.createBuiltInHostAgent();
       return apiFetch('/sessions', {
         method: 'POST',
-        body: JSON.stringify({
-          agent_id: 'build',
-          project_id: projectId || undefined,
-          provider: provider || undefined,
-          task: typeof options.task === 'string' && options.task.trim() ? options.task : undefined,
-          images: images.length > 0 ? images : undefined,
-          queued: true,
-          queue_mode: 'serial',
+        body: JSON.stringify(sessionLaunch.buildSessionRequest({
+          agent,
+          provider: options.provider,
+          model: options.model,
+          projectId,
           metadata,
-        }),
+          task: options.task,
+          images: options.images,
+        })),
       });
     };
 
     const listProjects = async () => apiFetch('/projects');
     const listProviders = async () => apiFetch('/providers');
+    const listProviderModels = async (provider) => {
+      const providerType = typeof provider === 'string' ? provider : provider?.type;
+      const path = sessionLaunch.modelsPathForProvider(providerType);
+      if (!path) return sessionLaunch.normalizeModelsResponse({}, provider);
+      try {
+        const body = await apiFetch(path);
+        return sessionLaunch.normalizeModelsResponse(body, provider);
+      } catch {
+        return sessionLaunch.normalizeModelsResponse({}, provider);
+      }
+    };
+    const listUnifiedAgents = async (projectId = '') => {
+      const query = String(projectId || '').trim() === '' ? '' : `?project_id=${encodeURIComponent(String(projectId).trim())}`;
+      const body = await apiFetch(`/unified-agents/${query}`);
+      if (Array.isArray(body?.agents)) return body.agents;
+      return Array.isArray(body) ? body : [];
+    };
 
     const sendStreamMessage = async (sessionId, message, images = [], handlers = {}) => {
       const baseUrl = shared.validateLoopbackBaseUrl(await getBaseUrl());
@@ -168,7 +176,9 @@
       apiFetch,
       createSession,
       listProviders,
+      listProviderModels,
       listProjects,
+      listUnifiedAgents,
       sendStreamMessage,
     };
   };

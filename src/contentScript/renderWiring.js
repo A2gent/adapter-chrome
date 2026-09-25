@@ -62,6 +62,10 @@
     setState,
     saveBaseUrl,
     loadSettingsAndProjects,
+    changeProject,
+    changeProvider,
+    changeAgent,
+    changeModel,
     startSession,
     sendFollowup,
     sendFullRecapture,
@@ -82,10 +86,26 @@
     shadow.querySelector('[data-role="refresh-projects"]')?.addEventListener('click', () => void loadSettingsAndProjects());
     shadow.querySelector('[data-role="save-base-url"]')?.addEventListener('click', () => void saveBaseUrl());
     shadow.querySelector('[data-role="project"]')?.addEventListener('change', (event) => {
+      if (typeof changeProject === 'function') {
+        void changeProject(event.target.value);
+        return;
+      }
       setState({
         selectedProjectId: event.target.value,
         projectDetection: { mode: 'manual', label: 'Manual selection', detail: 'Project chosen manually.' },
       });
+    });
+    shadow.querySelector('[data-role="agent"]')?.addEventListener('change', (event) => {
+      if (typeof changeAgent === 'function') void changeAgent(event.target.value);
+      else setState({ selectedAgentId: event.target.value });
+    });
+    shadow.querySelector('[data-role="provider"]')?.addEventListener('change', (event) => {
+      if (typeof changeProvider === 'function') void changeProvider(event.target.value);
+      else setState({ selectedProvider: event.target.value });
+    });
+    shadow.querySelector('[data-role="model"]')?.addEventListener('change', (event) => {
+      if (typeof changeModel === 'function') void changeModel(event.target.value);
+      else setState({ selectedModel: event.target.value });
     });
     shadow.querySelector('[data-role="prompt"]')?.addEventListener('input', (event) => {
       getState().prompt = event.target.value;

@@ -14,9 +14,15 @@ const baseState = (overrides = {}) => ({
   messages: [],
   projectDetection: { mode: 'default', label: 'Default project', detail: '' },
   projects: [],
+  providers: [],
+  models: [],
+  agents: [],
   prompt: '',
   recapturing: false,
   selectedProjectId: '',
+  selectedProvider: '',
+  selectedModel: '',
+  selectedAgentId: 'builtin:host-agent',
   sessionId: '',
   settingsOpen: false,
   status: 'Ready',
@@ -59,7 +65,8 @@ test('active annotation tools render inside the movable dialog below the header'
   assert.match(html, /data-tool="arrow" aria-pressed="false">Arrow<\/button>/);
   assert.match(html, /data-tool="region" aria-pressed="false">Rectangle<\/button>/);
   assert.match(html, /data-tool="element" aria-pressed="true">Element<\/button>/);
-  assert.match(html, /data-role="drawing-hint"/);
+  assert.doesNotMatch(html, /data-role="drawing-hint"/);
+  assert.doesNotMatch(html, /Drag a rectangle/);
 });
 
 test('drawing header reflects active drawing state and disables cancellation while busy', () => {
@@ -106,6 +113,12 @@ test('session creation form renders escaped project controls', () => {
         { id: 'project-<2>', name: 'Important <Project>' },
       ],
       selectedProjectId: 'project-<2>',
+      selectedProvider: 'cursor',
+      selectedModel: 'composer-2',
+      providers: [{ type: 'cursor', display_name: 'Cursor' }],
+      models: ['composer-2'],
+      agents: [{ id: 'builtin:host-agent', name: 'Built-in agent on host', runtime: 'host' }],
+      selectedAgentId: 'builtin:host-agent',
     }),
     compactOverlayHeight: 160,
     compactOverlayMinHeight: 120,
@@ -114,8 +127,15 @@ test('session creation form renders escaped project controls', () => {
 
   assert.match(html, /<section class="create-panel" aria-label="Create a new A2gent session">/);
   assert.match(html, /<option value="project-&lt;2&gt;" selected>Important &lt;Project&gt;<\/option>/);
-  assert.match(html, /data-role="refresh-projects"[\s\S]*class="secondary icon-button"[\s\S]*aria-label="Refresh projects"[\s\S]*<svg/);
-  assert.match(html, /\.project-row label[\s\S]*max-width:/);
+  assert.match(html, /data-role="refresh-projects"[\s\S]*class="secondary icon-button"[\s\S]*aria-label="Refresh launch options"[\s\S]*<svg/);
+  const promptIndex = html.indexOf('data-role="prompt"');
+  const projectIndex = html.indexOf('data-role="project"');
+  assert.ok(promptIndex > 0 && promptIndex < projectIndex, 'Composer textarea should sit above project/provider selects');
+  assert.match(html, /data-role="agent"/);
+  assert.match(html, /data-role="provider"/);
+  assert.match(html, /data-role="model"/);
+  assert.doesNotMatch(html, /Project context/);
+  assert.doesNotMatch(html, /A2gent Browser Adapter/);
   assert.doesNotMatch(html, /class="detection/);
   assert.doesNotMatch(html, /<script>|<repo>|<Project>/);
 });
@@ -172,7 +192,31 @@ test('overlay panel is movable and gives session history more space', () => {
   assert.match(html, /bottom: var\(--a2gent-overlay-bottom/);
   assert.match(html, /width: min\(var\(--a2gent-overlay-width/);
   assert.match(html, /header \{[\s\S]*cursor: move;/);
-  assert.match(html, /\.create-composer textarea \{[\s\S]*height: 82px;[\s\S]*min-height: 82px;/);
+  assert.match(html, /\.create-composer textarea \{[\s\S]*height: 96px;[\s\S]*min-height: 96px;/);
   assert.match(html, /\.followup-row textarea \{ min-height: 72px; \}/);
+  assert.doesNotMatch(html, /A2gent Browser Adapter/);
   assert.match(html, /data-role="close" class="ghost icon-button" aria-label="Close" title="Close"[\s\S]*<svg class="close-icon"[\s\S]*<path d="M5 5l14 14M19 5L5 19"/);
+});
+
+test('provider and model selects hide when a docker agent is chosen', () => {
+  const html = renderOverlay({
+    state: baseState({
+      agents: [
+        { id: 'builtin:host-agent', name: 'Built-in agent on host', runtime: 'host' },
+        { id: 'reviewer', name: 'Reviewer', runtime: 'docker' },
+      ],
+      selectedAgentId: 'reviewer',
+      providers: [{ type: 'cursor', display_name: 'Cursor' }],
+      models: ['composer-2'],
+      selectedProvider: 'cursor',
+      selectedModel: 'composer-2',
+    }),
+    compactOverlayHeight: 280,
+    compactOverlayMinHeight: 240,
+    expandedOverlayMinHeight: 360,
+  });
+
+  assert.match(html, /data-role="agent"/);
+  assert.doesNotMatch(html, /data-role="provider"/);
+  assert.doesNotMatch(html, /data-role="model"/);
 });

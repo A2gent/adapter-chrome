@@ -58,6 +58,7 @@
         "src/contentDrawing.js",
         "src/contentUi.js",
         "src/contentScript/shared.js",
+        "src/contentScript/sessionLaunch.js",
         "src/contentScript/projectMatching.js",
         "src/contentScript/diagnosticsHelpers.js",
         "src/contentScript/overlayFocus.js",

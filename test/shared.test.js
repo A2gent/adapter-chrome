@@ -54,6 +54,12 @@ test('serializeApiOptions keeps only proxy-safe fetch fields', () => {
   );
 });
 
+test('compact overlay defaults leave room for composer plus launch selects', () => {
+  assert.ok(shared.COMPACT_OVERLAY_HEIGHT >= 280);
+  assert.ok(shared.COMPACT_OVERLAY_MIN_HEIGHT >= 240);
+  assert.equal(shared.STORAGE_SESSION_LAUNCH_KEY, 'a2gent.adapterChrome.sessionLaunch');
+});
+
 test('buildSessionDetailUrl encodes Caesar session route ids', () => {
   assert.equal(
     shared.buildSessionDetailUrl('session/with spaces'),

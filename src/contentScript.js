@@ -28,7 +28,14 @@
     open: false,
     baseUrl: DEFAULT_BRUTE_BASE_URL,
     projects: [],
+    providers: [],
+    globalAgents: [],
+    models: [],
+    agents: [],
     selectedProjectId: '',
+    selectedProvider: '',
+    selectedModel: '',
+    selectedAgentId: '',
     projectDetection: { mode: 'manual', label: 'Manual selection', detail: '' },
     prompt: '',
     followup: '',
@@ -108,9 +115,13 @@
   };
 
 
+  const sessionLaunch = window.__A2GENT_CONTENT_SCRIPT_SESSION_LAUNCH__;
   const client = api.createApiClient({ getBaseUrl: () => state.baseUrl || DEFAULT_BRUTE_BASE_URL });
   const createSession = client.createSession;
   const listProjects = client.listProjects;
+  const listProviders = client.listProviders;
+  const listProviderModels = client.listProviderModels;
+  const listUnifiedAgents = client.listUnifiedAgents;
 
   const handleStreamEvent = (event) => {
     if (!event || typeof event !== 'object') return;
@@ -203,7 +214,36 @@
     setState,
     setRawState,
     listProjects,
+    listProviders,
+    listUnifiedAgents,
+    listProviderModels,
     render,
+  });
+
+  const changeProject = (projectId) => settings.changeProject({
+    getState,
+    setState,
+    listUnifiedAgents,
+    projectId,
+  });
+
+  const changeProvider = (providerType) => settings.changeProvider({
+    getState,
+    setState,
+    listProviderModels,
+    providerType,
+  });
+
+  const changeAgent = (agentId) => settings.changeAgent({
+    getState,
+    setState,
+    agentId,
+  });
+
+  const changeModel = (model) => settings.changeModel({
+    getState,
+    setState,
+    model,
   });
 
   const saveBaseUrl = () => settings.saveBaseUrl({
@@ -220,7 +260,7 @@
       return;
     }
     if (!state.selectedProjectId) {
-      setState({ error: 'Open Settings and select a project before creating a session.' });
+      setState({ error: 'Select a project before creating a session.' });
       return;
     }
 
@@ -243,9 +283,13 @@
       // WHAT: include diagnostics in the create request instead of immediately opening a stream.
       const initialMessage = createInitialMessage(prompt, diagnosticsBundle.payload);
       const initialImages = [imageFromScreenshot(diagnosticsBundle.screenshotDataUrl, 'initial-page-screenshot.png')];
+      const selectedAgent = sessionLaunch.resolveSelectedAgent(state.agents, state.selectedAgentId);
       const created = await createSession(state.selectedProjectId, metadata, {
         task: initialMessage,
         images: initialImages,
+        agent: selectedAgent,
+        provider: state.selectedProvider,
+        model: state.selectedModel,
       });
       setState({ sessionId: created.id, status: 'Session queued in Brute' });
       appendMessage('user', prompt);
@@ -348,6 +392,10 @@
     setState,
     saveBaseUrl,
     loadSettingsAndProjects,
+    changeProject,
+    changeProvider,
+    changeAgent,
+    changeModel,
     startSession,
     sendFollowup,
     sendFullRecapture,
@@ -374,7 +422,7 @@
       enableDrawingInput();
     }
     setState({ open: nextOpen, settingsOpen: false });
-    if (nextOpen && state.projects.length === 0 && !state.busy) {
+    if (nextOpen && (state.projects.length === 0 || state.providers.length === 0) && !state.busy) {
       await loadSettingsAndProjects();
     }
     if (nextOpen) {

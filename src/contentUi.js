@@ -7,9 +7,9 @@
     .replace(/'/g, '&#039;');
 
   const DRAWING_TOOLS = [
-    { id: 'arrow', label: 'Arrow', hint: 'Drag an arrow. Notes stay in the popup; screenshots show only the number.' },
-    { id: 'region', label: 'Rectangle', hint: 'Drag a rectangle. Notes stay in the popup; screenshots show only the number.' },
-    { id: 'element', label: 'Element', hint: 'Click a page element to highlight it with a precise red border.' },
+    { id: 'arrow', label: 'Arrow' },
+    { id: 'region', label: 'Rectangle' },
+    { id: 'element', label: 'Element' },
   ];
 
   const activeDrawingTool = (state) => (
@@ -43,7 +43,6 @@
     // WHAT: keep Arrow/Rectangle/Element inside the adapter panel so dragging the dialog moves the tools.
     if (!state.drawingEnabled) return '';
     const toolId = activeDrawingTool(state);
-    const hint = DRAWING_TOOLS.find((tool) => tool.id === toolId)?.hint || DRAWING_TOOLS[1].hint;
     return `
       <div class="drawing-tools" data-role="drawing-tools">
         <div class="drawing-tool-buttons">
@@ -51,7 +50,6 @@
             <button type="button" data-tool="${tool.id}" aria-pressed="${tool.id === toolId ? 'true' : 'false'}">${tool.label}</button>
           `).join('')}
         </div>
-        <span class="drawing-hint" data-role="drawing-hint">${hint}</span>
       </div>
     `;
   };
@@ -81,28 +79,77 @@
     `;
   };
 
-  const renderProjectContext = (state, selectedProject, projectOptions) => `
-    <div class="project-row">
-      <label>
-        <span>Project context</span>
-        <select data-role="project">
-          <option value="">Select project...</option>
-          ${projectOptions}
-        </select>
-      </label>
-      <button
-        type="button"
-        data-role="refresh-projects"
-        class="secondary icon-button"
-        aria-label="Refresh projects"
-        title="Refresh projects"
-      >${ICONS.refreshProjects}</button>
-    </div>
-  `;
+  const renderSelectOptions = (items, selectedValue, valueKey, labelKey) => items.map((item) => {
+    const value = escapeHtml(item[valueKey]);
+    const label = escapeHtml(item[labelKey]);
+    return `<option value="${value}" ${item[valueKey] === selectedValue ? 'selected' : ''}>${label}</option>`;
+  }).join('');
 
-  const renderCreation = (state, selectedProject, projectOptions) => `
+  const renderLaunchControls = (state, projectOptions) => {
+    const selectedAgent = (state.agents || []).find((agent) => agent.id === state.selectedAgentId)
+      || { id: 'builtin:host-agent', runtime: 'host' };
+    const showProviderControls = !selectedAgent.id || selectedAgent.id === 'builtin:host-agent' || selectedAgent.runtime === 'host';
+    const providerType = String(state.selectedProvider || '');
+    const showModelSelect = showProviderControls && providerType
+      && providerType !== 'automatic_router'
+      && providerType !== 'fallback_chain'
+      && !providerType.startsWith('fallback_chain:');
+    const agentOptions = renderSelectOptions(state.agents || [], state.selectedAgentId, 'id', 'name');
+    const providerOptions = renderSelectOptions(
+      (state.providers || []).map((provider) => ({
+        id: provider.type,
+        name: provider.display_name || provider.type,
+      })),
+      state.selectedProvider,
+      'id',
+      'name',
+    );
+    const modelOptions = (state.models || []).map((model) => (
+      `<option value="${escapeHtml(model)}" ${model === state.selectedModel ? 'selected' : ''}>${escapeHtml(model)}</option>`
+    )).join('');
+    return `
+      <div class="launch-row">
+        <label>
+          <select data-role="project" aria-label="Project">
+            <option value="">Select project...</option>
+            ${projectOptions}
+          </select>
+        </label>
+        <label>
+          <select data-role="agent" aria-label="Agent">
+            ${agentOptions || '<option value="builtin:host-agent">Built-in agent on host</option>'}
+          </select>
+        </label>
+        ${showProviderControls ? `
+          <label>
+            <select data-role="provider" aria-label="Provider">
+              <option value="">Select provider...</option>
+              ${providerOptions}
+            </select>
+          </label>
+          ${showModelSelect ? `
+          <label>
+            <select data-role="model" aria-label="Model">
+              <option value="">Select model...</option>
+              ${modelOptions}
+            </select>
+          </label>
+          ` : ''}
+        ` : ''}
+        <button
+          type="button"
+          data-role="refresh-projects"
+          class="secondary icon-button"
+          aria-label="Refresh launch options"
+          title="Refresh launch options"
+        >${ICONS.refreshProjects}</button>
+      </div>
+    `;
+  };
+
+  // WHY: the prompt is the primary action; project/provider/agent sit below as launch targets.
+  const renderCreation = (state, projectOptions) => `
     <section class="create-panel" aria-label="Create a new A2gent session">
-      ${renderProjectContext(state, selectedProject, projectOptions)}
       <section class="create-composer">
         <textarea data-role="prompt" rows="1" aria-label="Start a new chat" placeholder="Start a new chat... Enter to send, Shift+Enter for newline.">${escapeHtml(state.prompt)}</textarea>
         <button
@@ -119,6 +166,7 @@
           </svg>
         </button>
       </section>
+      ${renderLaunchControls(state, projectOptions)}
     </section>
   `;
 
@@ -181,7 +229,7 @@
     .panel.settings-open { min-height: ${expandedOverlayMinHeight}px; }
     .panel.is-new-session:not(.settings-open) { justify-content: flex-start; }
     .resize { position: absolute; top: 0; left: 0; right: 0; height: 7px; cursor: ns-resize; }
-    header, .settings-row, .project-row, .session-bar, .followup-row, .actions, .header-actions { display: flex; align-items: center; gap: 8px; }
+    header, .settings-row, .launch-row, .session-bar, .followup-row, .actions, .header-actions { display: flex; align-items: center; gap: 8px; }
     header {
       justify-content: space-between;
       flex: 0 0 auto;
@@ -211,7 +259,6 @@
       color: #111827;
       font-weight: 800;
     }
-    .drawing-hint { color: #9fb1c7; font-size: 12px; min-width: 0; flex: 1 1 180px; }
     header textarea,
     header input,
     header select,
@@ -248,8 +295,9 @@
       background: rgba(255, 255, 255, 0.04);
     }
     .settings-row label { flex: 1 1 360px; }
-    .project-row label { flex: 0 1 220px; max-width: 220px; }
-    .project-row select { min-height: 34px; }
+    .launch-row { flex-wrap: wrap; }
+    .launch-row label { flex: 1 1 140px; min-width: 120px; }
+    .launch-row select { min-height: 34px; }
     button {
       border: 0;
       border-radius: 8px;
@@ -300,11 +348,11 @@
       gap: 12px;
       align-items: center;
       flex: 0 0 auto;
-      min-height: 84px;
+      min-height: 98px;
     }
     .create-composer textarea {
-      height: 82px;
-      min-height: 82px;
+      height: 96px;
+      min-height: 96px;
       max-height: 160px;
       resize: none;
       overflow: auto;
@@ -370,11 +418,11 @@
         height: min(var(--a2gent-overlay-height), 60vh);
         padding: 10px 10px 12px;
       }
-      .settings-row, .project-row, .followup-row { display: grid; grid-template-columns: 1fr; }
+      .settings-row, .launch-row, .followup-row { display: grid; grid-template-columns: 1fr; }
       button { width: 100%; }
-      .header-actions button, .drawing-tools button, .project-row .icon-button { width: auto; }
-      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 76px; }
-      .create-composer textarea { height: 74px; min-height: 74px; padding: 13px 15px; font-size: 15px; }
+      .header-actions button, .drawing-tools button, .launch-row .icon-button { width: auto; }
+      .create-composer { grid-template-columns: minmax(0, 1fr) 44px; gap: 10px; min-height: 88px; }
+      .create-composer textarea { height: 86px; min-height: 86px; padding: 13px 15px; font-size: 15px; }
       .create-composer button.send-button { width: 44px; min-width: 44px; height: 44px; }
       .send-icon { width: 28px; height: 28px; }
     }
@@ -413,7 +461,6 @@
   };
 
   const renderOverlay = ({ state, compactOverlayHeight, compactOverlayMinHeight, expandedOverlayMinHeight }) => {
-    const selectedProject = state.projects.find((project) => project.id === state.selectedProjectId) || null;
     const projectOptions = state.projects.map((project) => (
       `<option value="${escapeHtml(project.id)}" ${project.id === state.selectedProjectId ? 'selected' : ''}>${escapeHtml(project.name)}</option>`
     )).join('');
@@ -426,7 +473,6 @@
         <div class="resize" data-role="resize" title="Drag to resize"></div>
         <header>
           <div>
-            <strong>A2gent Browser Adapter</strong>
             <span class="status ${state.error ? 'error' : ''}">${escapeHtml(state.error || state.status)}</span>
           </div>
           <div class="header-actions">
@@ -448,7 +494,7 @@
         </header>
         ${renderDrawingTools(state)}
         ${settingsPanel}
-        ${state.sessionId ? renderContinuation(state, messages) : renderCreation(state, selectedProject, projectOptions)}
+        ${state.sessionId ? renderContinuation(state, messages) : renderCreation(state, projectOptions)}
       </div>
     `;
   };

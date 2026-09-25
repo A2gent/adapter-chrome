@@ -47,7 +47,7 @@ test('new sessions are queued with initial diagnostics in the create request', (
 
   assert.match(contentScript, /const initialMessage = createInitialMessage\(prompt, diagnosticsBundle\.payload\);/);
   assert.match(contentScript, /const initialImages = \[imageFromScreenshot\(diagnosticsBundle\.screenshotDataUrl, 'initial-page-screenshot\.png'\)\];/);
-  assert.match(contentScript, /createSession\(state\.selectedProjectId, metadata, \{\s*task: initialMessage,\s*images: initialImages,\s*\}\)/);
+  assert.match(contentScript, /createSession\(state\.selectedProjectId, metadata, \{\s*task: initialMessage,\s*images: initialImages,\s*agent: selectedAgent,\s*provider: state\.selectedProvider,\s*model: state\.selectedModel,\s*\}\)/);
   assert.doesNotMatch(
     contentScript,
     /await sendStreamMessage\(\s*created\.id,\s*createInitialMessage\(prompt, diagnosticsBundle\.payload\)/,

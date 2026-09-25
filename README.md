@@ -27,7 +27,7 @@ Features:
 <img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
 
 
-The extension defaults to `http://localhost:5445`. Project context is selected directly in the new-session form; click **Settings** in the overlay when you need to override the local Brute endpoint. The endpoint remains loopback-only: `localhost`, `127.0.0.1`, or `::1` over HTTP/HTTPS. No authentication is used; this is intentionally a local-machine trust model.
+The extension defaults to `http://localhost:5445`. The new-session form selects project context plus the same provider/model/agent target used in Caesar. Click **Settings** in the overlay when you need to override the local Brute endpoint. The endpoint remains loopback-only: `localhost`, `127.0.0.1`, or `::1` over HTTP/HTTPS. No authentication is used; this is intentionally a local-machine trust model.
 
 On `https://` pages the content scripts do **not** fetch `http://localhost` directly. Chrome treats that as a public-origin-to-loopback Private Network Access request and blocks it before normal CORS headers can help. Instead, the content scripts send messages to the extension background service worker, and the service worker performs Brute HTTP requests using the loopback `host_permissions` declared in `manifest.json`. If HTTPS pages show `loopback address space` errors, reload the unpacked extension so the latest background proxy code is active.
 
