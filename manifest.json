@@ -63,6 +63,7 @@
         "src/contentScript/diagnosticsHelpers.js",
         "src/contentScript/overlayFocus.js",
         "src/contentScript/drawingBridge.js",
+        "src/contentScript/sessionEvents.js",
         "src/contentScript/caesarApi.js",
         "src/contentScript/pageDiagnostics.js",
         "src/contentScript/projectSettings.js",

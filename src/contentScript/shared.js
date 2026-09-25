@@ -21,9 +21,11 @@
   const MAX_DOM_HTML = 180000;
   const MAX_DOM_TEXT = 60000;
   const MAX_NETWORK_ENTRIES = 20;
-  // WHY: the unopened-session overlay should behave like Caesar's compact composer
-  // instead of covering a large part of the current browser page.
-  // WHAT: use a short default/minimum height and expand only for settings/history views.
+  // WHY: the overlay is a right-side chat sidebar so the page stays visible.
+  // WHAT: default to about 30% of the viewport and allow the user to drag-resize width.
+  const SIDEBAR_OVERLAY_WIDTH_RATIO = 0.3;
+  const SIDEBAR_OVERLAY_MIN_WIDTH = 320;
+  const SIDEBAR_OVERLAY_MAX_WIDTH_RATIO = 0.8;
   const COMPACT_OVERLAY_HEIGHT = 280;
   const COMPACT_OVERLAY_MIN_HEIGHT = 240;
   const EXPANDED_OVERLAY_MIN_HEIGHT = 240;
@@ -222,6 +224,9 @@
     MAX_DOM_HTML,
     MAX_DOM_TEXT,
     MAX_NETWORK_ENTRIES,
+    SIDEBAR_OVERLAY_WIDTH_RATIO,
+    SIDEBAR_OVERLAY_MIN_WIDTH,
+    SIDEBAR_OVERLAY_MAX_WIDTH_RATIO,
     COMPACT_OVERLAY_HEIGHT,
     COMPACT_OVERLAY_MIN_HEIGHT,
     EXPANDED_OVERLAY_MIN_HEIGHT,

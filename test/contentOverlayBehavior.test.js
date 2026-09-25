@@ -28,18 +28,27 @@ test('render wiring routes dialog tool buttons to the drawing overlay', () => {
   assert.match(contentScript, /setDrawingTool,/);
 });
 
-test('render wiring supports dragging the overlay panel independently of resizing', () => {
+test('clampOverlayWidth defaults to 30 percent and ignores unset widths', () => {
+  const { clampOverlayWidth } = require('../src/contentScript/renderWiring.js');
+  const shared = require('../src/contentScript/shared.js');
+
+  assert.equal(clampOverlayWidth(0, 1400), Math.round(1400 * shared.SIDEBAR_OVERLAY_WIDTH_RATIO));
+  assert.equal(clampOverlayWidth(500, 1400), 500);
+  assert.equal(clampOverlayWidth(80, 1400), shared.SIDEBAR_OVERLAY_MIN_WIDTH);
+  assert.equal(clampOverlayWidth(1300, 1400), Math.round(1400 * shared.SIDEBAR_OVERLAY_MAX_WIDTH_RATIO));
+});
+
+test('render wiring resizes the right-side overlay width from the left edge', () => {
   const renderWiring = readFile('src/contentScript/renderWiring.js');
 
-  assert.match(renderWiring, /const clampOverlayPosition = /);
+  assert.match(renderWiring, /const clampOverlayWidth = /);
   assert.match(renderWiring, /const applyOverlayLayout = /);
-  assert.match(renderWiring, /const startPanelDrag = \(event\) => \{/);
-  assert.match(renderWiring, /shadow\.querySelector\('header'\)\?\.addEventListener\('pointerdown', startPanelDrag\)/);
-  assert.match(renderWiring, /shadow\.querySelector\('\[data-role="drawing-tools"\]'\)\?\.addEventListener\('pointerdown', startPanelDrag\)/);
-  assert.match(renderWiring, /left: startPosition\.left \+ \(moveEvent\.clientX - startX\)/);
-  assert.match(renderWiring, /bottom: startPosition\.bottom - \(moveEvent\.clientY - startY\)/);
-  assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-left'/);
-  assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-bottom'/);
+  assert.match(renderWiring, /shared\.SIDEBAR_OVERLAY_WIDTH_RATIO/);
+  assert.match(renderWiring, /startWidth \+ \(startX - moveEvent\.clientX\)/);
+  assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-width'/);
+  assert.doesNotMatch(renderWiring, /const startPanelDrag = /);
+  assert.doesNotMatch(renderWiring, /--a2gent-overlay-left/);
+  assert.doesNotMatch(renderWiring, /--a2gent-overlay-bottom/);
 });
 
 test('overlay rendering is isolated from RTL pages', () => {

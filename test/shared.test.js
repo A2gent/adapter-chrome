@@ -54,9 +54,10 @@ test('serializeApiOptions keeps only proxy-safe fetch fields', () => {
   );
 });
 
-test('compact overlay defaults leave room for composer plus launch selects', () => {
-  assert.ok(shared.COMPACT_OVERLAY_HEIGHT >= 280);
-  assert.ok(shared.COMPACT_OVERLAY_MIN_HEIGHT >= 240);
+test('sidebar overlay defaults occupy about 30 percent of the viewport', () => {
+  assert.equal(shared.SIDEBAR_OVERLAY_WIDTH_RATIO, 0.3);
+  assert.ok(shared.SIDEBAR_OVERLAY_MIN_WIDTH >= 280);
+  assert.ok(shared.SIDEBAR_OVERLAY_MAX_WIDTH_RATIO >= 0.6);
   assert.equal(shared.STORAGE_SESSION_LAUNCH_KEY, 'a2gent.adapterChrome.sessionLaunch');
 });
 

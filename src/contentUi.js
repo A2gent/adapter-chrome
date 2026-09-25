@@ -187,7 +187,6 @@
   const renderStyles = ({ compactOverlayHeight, compactOverlayMinHeight, expandedOverlayMinHeight }) => `
     :host {
       all: initial;
-      --a2gent-overlay-height: ${compactOverlayHeight}px;
       /* WHY: popover UA styles center a bordered dialog; we only need transparent top-layer stacking. */
       position: fixed;
       inset: 0;
@@ -203,13 +202,14 @@
     * { box-sizing: border-box; }
     .panel {
       position: fixed;
-      left: var(--a2gent-overlay-left, 0px);
-      right: auto;
-      bottom: var(--a2gent-overlay-bottom, 0px);
-      width: min(var(--a2gent-overlay-width, 100vw), calc(100vw - var(--a2gent-overlay-left, 0px)));
-      height: min(var(--a2gent-overlay-height), 60vh);
-      min-height: ${compactOverlayMinHeight}px;
-      max-height: 640px;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: auto;
+      width: var(--a2gent-overlay-width, 30vw);
+      height: 100vh;
+      min-height: 0;
+      max-height: none;
       z-index: 2147483647;
       pointer-events: auto;
       display: flex;
@@ -218,25 +218,23 @@
       padding: 10px 14px 14px;
       color: #e9f0fb;
       background: linear-gradient(180deg, #14181f 0%, #0d1117 100%);
-      border-top: 1px solid rgba(145, 181, 255, 0.28);
-      box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.45);
+      border-left: 1px solid rgba(145, 181, 255, 0.28);
+      box-shadow: -14px 0 44px rgba(0, 0, 0, 0.45);
       font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       direction: ltr;
       text-align: left;
       unicode-bidi: isolate;
     }
     .panel.has-session,
-    .panel.settings-open { min-height: ${expandedOverlayMinHeight}px; }
+    .panel.settings-open { min-height: 0; }
     .panel.is-new-session:not(.settings-open) { justify-content: flex-start; }
-    .resize { position: absolute; top: 0; left: 0; right: 0; height: 7px; cursor: ns-resize; }
+    .resize { position: absolute; top: 0; bottom: 0; left: 0; width: 7px; cursor: ew-resize; }
     header, .settings-row, .launch-row, .session-bar, .followup-row, .actions, .header-actions { display: flex; align-items: center; gap: 8px; }
     header {
       justify-content: space-between;
       flex: 0 0 auto;
       min-height: 32px;
-      cursor: move;
       user-select: none;
-      touch-action: none;
     }
     .drawing-tools {
       display: flex;
@@ -244,9 +242,6 @@
       align-items: center;
       gap: 8px;
       flex: 0 0 auto;
-      cursor: move;
-      user-select: none;
-      touch-action: none;
     }
     .drawing-tool-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .drawing-tools button {
@@ -341,6 +336,7 @@
       display: grid;
       gap: 8px;
       flex: 0 0 auto;
+      margin-top: auto;
     }
     .create-composer {
       display: grid;
@@ -414,8 +410,8 @@
     .continuation-actions { justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 720px) {
       .panel {
-        width: min(var(--a2gent-overlay-width, 100vw), calc(100vw - var(--a2gent-overlay-left, 0px)));
-        height: min(var(--a2gent-overlay-height), 60vh);
+        width: var(--a2gent-overlay-width, 85vw);
+        height: 100vh;
         padding: 10px 10px 12px;
       }
       .settings-row, .launch-row, .followup-row { display: grid; grid-template-columns: 1fr; }
@@ -450,7 +446,7 @@
 
   const renderMessages = (messages) => {
     if (!messages.length) {
-      return '<div class="empty">No inline messages yet. Create a session to start.</div>';
+      return '<div class="empty">Waiting for agent messages...</div>';
     }
     return messages.map((message) => `
       <div class="message ${message.role}">
@@ -470,7 +466,7 @@
     return `
       <style>${renderStyles({ compactOverlayHeight, compactOverlayMinHeight, expandedOverlayMinHeight })}</style>
       <div class="panel ${state.sessionId ? 'has-session' : 'is-new-session'} ${state.settingsOpen ? 'settings-open' : ''}" role="dialog" aria-label="A2gent browser diagnostics">
-        <div class="resize" data-role="resize" title="Drag to resize"></div>
+        <div class="resize" data-role="resize" title="Drag to resize width"></div>
         <header>
           <div>
             <span class="status ${state.error ? 'error' : ''}">${escapeHtml(state.error || state.status)}</span>

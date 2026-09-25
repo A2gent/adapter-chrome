@@ -53,4 +53,14 @@ test('new sessions are queued with initial diagnostics in the create request', (
     /await sendStreamMessage\(\s*created\.id,\s*createInitialMessage\(prompt, diagnosticsBundle\.payload\)/,
     'queued session creation must not immediately start the session stream',
   );
+  assert.match(contentScript, /startSessionEvents\(created\.id\)/);
+});
+
+test('created sessions subscribe to Brute events and keep follow-up sends', () => {
+  const contentScript = readFile('src/contentScript.js');
+
+  assert.match(contentScript, /const startSessionEvents = /);
+  assert.match(contentScript, /client\.subscribeSessionEvents\(sessionId/);
+  assert.match(contentScript, /await sendStreamMessage\(state\.sessionId, createFollowupMessage\(prompt, lightweight\), \[\]/);
+  assert.match(contentScript, /onEvent:\s*liveEventsActive\(\) \? undefined : handleStreamEvent/);
 });

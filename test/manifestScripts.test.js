@@ -27,9 +27,10 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/contentScript/projectMatching.js',
     'src/contentScript/diagnosticsHelpers.js',
     'src/contentScript/overlayFocus.js',
-    'src/contentScript/drawingBridge.js',
-    'src/contentScript/caesarApi.js',
-    'src/contentScript/pageDiagnostics.js',
+        'src/contentScript/drawingBridge.js',
+        'src/contentScript/sessionEvents.js',
+        'src/contentScript/caesarApi.js',
+        'src/contentScript/pageDiagnostics.js',
     'src/contentScript/projectSettings.js',
     'src/contentScript/renderWiring.js',
     'src/contentScript.js',
@@ -46,7 +47,7 @@ test('background fallback injection includes all isolated content helpers before
 
   assert.match(
     background,
-    /files: \['src\/drawingAnnotation\.js', 'src\/contentDrawing\.js', 'src\/contentUi\.js', 'src\/contentScript\/shared\.js', 'src\/contentScript\/sessionLaunch\.js', 'src\/contentScript\/projectMatching\.js', 'src\/contentScript\/diagnosticsHelpers\.js', 'src\/contentScript\/overlayFocus\.js', 'src\/contentScript\/drawingBridge\.js', 'src\/contentScript\/caesarApi\.js', 'src\/contentScript\/pageDiagnostics\.js', 'src\/contentScript\/projectSettings\.js', 'src\/contentScript\/renderWiring\.js', 'src\/contentScript\.js', 'src\/browserControlBridge\.js'\]/,
+    /files: \['src\/drawingAnnotation\.js', 'src\/contentDrawing\.js', 'src\/contentUi\.js', 'src\/contentScript\/shared\.js', 'src\/contentScript\/sessionLaunch\.js', 'src\/contentScript\/projectMatching\.js', 'src\/contentScript\/diagnosticsHelpers\.js', 'src\/contentScript\/overlayFocus\.js', 'src\/contentScript\/drawingBridge\.js', 'src\/contentScript\/sessionEvents\.js', 'src\/contentScript\/caesarApi\.js', 'src\/contentScript\/pageDiagnostics\.js', 'src\/contentScript\/projectSettings\.js', 'src\/contentScript\/renderWiring\.js', 'src\/contentScript\.js', 'src\/browserControlBridge\.js'\]/,
   );
 });
 

@@ -7,6 +7,7 @@
   const shared = window.__A2GENT_CONTENT_SCRIPT_SHARED__;
   const focus = window.__A2GENT_CONTENT_SCRIPT_OVERLAY_FOCUS__;
   const api = window.__A2GENT_CONTENT_SCRIPT_CAESAR_API__;
+  const sessionEvents = window.__A2GENT_CONTENT_SCRIPT_SESSION_EVENTS__;
   const diagnostics = window.__A2GENT_CONTENT_SCRIPT_PAGE_DIAGNOSTICS__;
   const drawingBridge = window.__A2GENT_CONTENT_SCRIPT_DRAWING_BRIDGE__;
   const settings = window.__A2GENT_CONTENT_SCRIPT_PROJECT_SETTINGS__;
@@ -17,7 +18,6 @@
   const EXTENSION_VERSION = shared.EXTENSION_VERSION;
   const OVERLAY_SUBMIT_EVENT = shared.OVERLAY_SUBMIT_EVENT;
   const DRAWING_CHANGE_EVENT = shared.DRAWING_CHANGE_EVENT;
-  const COMPACT_OVERLAY_HEIGHT = shared.COMPACT_OVERLAY_HEIGHT;
 
   const buildSessionDetailUrl = shared.buildSessionDetailUrl;
 
@@ -50,8 +50,7 @@
     annotationCount: 0,
     drawingStrokeCount: 0,
     sessionId: '',
-    overlayHeight: COMPACT_OVERLAY_HEIGHT,
-    overlayPosition: {},
+    overlayWidth: 0,
     settingsOpen: false,
   };
 
@@ -89,27 +88,7 @@
   const appendMessage = (role, content) => {
     state = {
       ...state,
-      messages: [...shared.normalizeMessages(state.messages), { role, content, timestamp: shared.nowIso() }],
-    };
-    render();
-  };
-
-  const updateLastAssistant = (delta) => {
-    const messages = shared.normalizeMessages(state.messages);
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== 'assistant') {
-      messages.push({ role: 'assistant', content: delta, timestamp: shared.nowIso() });
-    } else {
-      messages[messages.length - 1] = { ...last, content: `${last.content}${delta}` };
-    }
-    state = { ...state, messages };
-    render();
-  };
-
-  const setMessagesFromServer = (messages) => {
-    state = {
-      ...state,
-      messages: shared.normalizeMessages(messages),
+      messages: [...sessionEvents.normalizeVisibleMessages(state.messages), { role, content, timestamp: shared.nowIso() }],
     };
     render();
   };
@@ -124,30 +103,51 @@
   const listUnifiedAgents = client.listUnifiedAgents;
 
   const handleStreamEvent = (event) => {
-    if (!event || typeof event !== 'object') return;
-    if (event.type === 'assistant_delta' && event.delta) {
-      updateLastAssistant(event.delta);
-      return;
-    }
-    if (event.type === 'status' && event.status) {
-      setState({ status: `Session ${event.status}` });
-      return;
-    }
-    if (event.type === 'tool_executing') {
-      appendMessage('assistant', `\n[Tool executing: ${(event.tool_calls || []).map((tool) => tool.name).join(', ')}]\n`);
-      return;
-    }
-    if (event.type === 'done') {
-      setMessagesFromServer(event.messages || []);
-      setState({ status: `Session ${event.status || 'updated'}`, busy: false });
-      return;
-    }
-    if (event.type === 'error') {
-      setState({ error: event.error || 'Session stream failed.', status: 'Error', busy: false });
-    }
+    const applied = sessionEvents.applySessionStreamEvent(state.messages, event, shared.nowIso);
+    state = { ...state, messages: applied.messages, ...applied.patch };
+    render();
   };
 
-  const sendStreamMessage = (sessionId, message, images = []) => client.sendStreamMessage(sessionId, message, images, { onEvent: handleStreamEvent });
+  let liveSessionEvents = null;
+  const liveEventsActive = () => Boolean(liveSessionEvents?.active);
+
+  const stopSessionEvents = () => {
+    if (!liveSessionEvents) return;
+    liveSessionEvents.active = false;
+    try {
+      liveSessionEvents.stop();
+    } catch {
+      // The service-worker port may already be gone after an extension reload.
+    }
+    liveSessionEvents = null;
+  };
+
+  const startSessionEvents = (sessionId) => {
+    stopSessionEvents();
+    const subscription = {
+      active: true,
+      stop: () => {},
+    };
+    const handle = client.subscribeSessionEvents(sessionId, {
+      onEvent: handleStreamEvent,
+      onError: (error) => {
+        subscription.active = false;
+        setState({
+          error: error instanceof Error ? error.message : String(error),
+          status: 'Error',
+        });
+      },
+    });
+    handle.promise.finally(() => {
+      if (liveSessionEvents === subscription) subscription.active = false;
+    });
+    subscription.stop = handle.stop;
+    liveSessionEvents = subscription;
+  };
+
+  const sendStreamMessage = (sessionId, message, images = []) => client.sendStreamMessage(sessionId, message, images, {
+    onEvent: liveEventsActive() ? undefined : handleStreamEvent,
+  });
 
   const syncDrawingState = () => {
     drawingBridge.syncDrawingState(getState, setRawState);
@@ -294,6 +294,7 @@
       setState({ sessionId: created.id, status: 'Session queued in Brute' });
       appendMessage('user', prompt);
       setState({ busy: false, status: 'Session queued', followup: '' });
+      startSessionEvents(created.id);
     } catch (error) {
       setState({ busy: false, status: 'Error', error: error instanceof Error ? error.message : String(error) });
     }

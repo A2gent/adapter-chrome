@@ -177,10 +177,10 @@ test('existing session view treats malformed message history as empty', () => {
     expandedOverlayMinHeight: 360,
   });
 
-  assert.match(html, /No inline messages yet\. Create a session to start\./);
+  assert.match(html, /Waiting for agent messages\.\.\./);
 });
 
-test('overlay panel is movable and gives session history more space', () => {
+test('overlay panel docks to the right as a resizable session sidebar', () => {
   const html = renderOverlay({
     state: baseState(),
     compactOverlayHeight: 176,
@@ -188,12 +188,16 @@ test('overlay panel is movable and gives session history more space', () => {
     expandedOverlayMinHeight: 360,
   });
 
-  assert.match(html, /left: var\(--a2gent-overlay-left/);
-  assert.match(html, /bottom: var\(--a2gent-overlay-bottom/);
-  assert.match(html, /width: min\(var\(--a2gent-overlay-width/);
-  assert.match(html, /header \{[\s\S]*cursor: move;/);
+  assert.match(html, /right:\s*0;/);
+  assert.match(html, /top:\s*0;/);
+  assert.match(html, /width: var\(--a2gent-overlay-width/);
+  assert.match(html, /height:\s*100vh;/);
+  assert.match(html, /\.resize \{[\s\S]*cursor: ew-resize;/);
+  assert.match(html, /data-role="resize" title="Drag to resize width"/);
   assert.match(html, /\.create-composer textarea \{[\s\S]*height: 96px;[\s\S]*min-height: 96px;/);
   assert.match(html, /\.followup-row textarea \{ min-height: 72px; \}/);
+  assert.doesNotMatch(html, /--a2gent-overlay-left/);
+  assert.doesNotMatch(html, /--a2gent-overlay-bottom/);
   assert.doesNotMatch(html, /A2gent Browser Adapter/);
   assert.match(html, /data-role="close" class="ghost icon-button" aria-label="Close" title="Close"[\s\S]*<svg class="close-icon"[\s\S]*<path d="M5 5l14 14M19 5L5 19"/);
 });

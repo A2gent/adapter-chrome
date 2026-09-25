@@ -326,6 +326,67 @@ test('sendStreamMessage starts a background stream and emits chunked NDJSON even
   assert.equal(portMock.disconnectListenerCount, 0);
 });
 
+test('subscribeSessionEvents opens a live SSE port and emits parsed session events', async (t) => {
+  const portMock = createPortMock();
+  const previousNow = Date.now;
+  const previousRandom = Math.random;
+  Date.now = () => 1234567890;
+  Math.random = () => 0.5;
+  t.after(() => {
+    Date.now = previousNow;
+    Math.random = previousRandom;
+  });
+  withChrome(t, {
+    runtime: {
+      connect(options) {
+        assert.deepEqual(options, { name: 'A2GENT_BRUTE_STREAM' });
+        return portMock.port;
+      },
+    },
+  });
+
+  const events = [];
+  const client = caesarApi.createApiClient({ getBaseUrl: () => 'http://localhost:5445?debug=1#hash' });
+  const subscription = client.subscribeSessionEvents('session/with space', {
+    onEvent(event) {
+      events.push(event);
+    },
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(portMock.postedMessages, [{
+    type: 'A2GENT_BRUTE_STREAM_START',
+    requestId: '1234567890-8',
+    baseUrl: 'http://localhost:5445',
+    path: '/sessions/session%2Fwith%20space/events',
+    options: {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+      },
+    },
+  }]);
+
+  portMock.emitMessage({
+    requestId: '1234567890-8',
+    type: 'A2GENT_BRUTE_STREAM_CHUNK',
+    chunk: ':heartbeat\n\nevent: session_snapshot\ndata: {"type":"session_snapshot","status":"queued","messages":[]}\n\n',
+  });
+  portMock.emitMessage({
+    requestId: '1234567890-8',
+    type: 'A2GENT_BRUTE_STREAM_CHUNK',
+    chunk: 'event: assistant_delta\ndata: {"type":"assistant_delta","delta":"Hi"}\n\n',
+  });
+
+  assert.deepEqual(events, [
+    { type: 'session_snapshot', status: 'queued', messages: [] },
+    { type: 'assistant_delta', delta: 'Hi' },
+  ]);
+
+  subscription.stop();
+  assert.equal(portMock.disconnectCount, 1);
+});
+
 test('sendStreamMessage rejects stream errors and unexpected disconnects', async (t) => {
   const errorPort = createPortMock();
   withChrome(t, { runtime: { connect: () => errorPort.port } });

@@ -22,7 +22,7 @@ Features:
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select this `adapter-chrome` directory.
 5. In the extension details, enable **Allow access to file URLs** if you want to use the adapter on local `file:///...` pages. Chrome keeps this permission disabled until you explicitly opt in.
-6. Navigate to any `http://`, `https://`, or enabled `file://` page and click the extension icon. The in-page bottom overlay toggles open/closed.
+6. Navigate to any `http://`, `https://`, or enabled `file://` page and click the extension icon. The in-page right-side overlay toggles open/closed.
 
 <img width="809" height="461" alt="Screenshot 2026-06-10 at 01 03 07" src="https://github.com/user-attachments/assets/26b4de0c-9f49-417d-bd62-6df9ebc84c70" />
 
@@ -81,7 +81,7 @@ When an external agent controls the page through the browser adapter, the extens
 
 ## Inline continuation
 
-After the initial session is created, the overlay stays in an inline continuation mode:
+The overlay docks to the right side of the page at about 30% width. Drag the left edge to resize it. After the initial session is created, the sidebar shows the live Brute conversation and stays in an inline continuation mode:
 
 - Each follow-up message automatically includes a lightweight refreshed JSON context containing `captured_at`, current URL, current title, and current selected text trimmed to 4,000 characters.
 - Follow-ups do not automatically recapture screenshots, DOM snapshots, console dumps, or network dumps.
