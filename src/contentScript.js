@@ -18,6 +18,7 @@
   const EXTENSION_VERSION = shared.EXTENSION_VERSION;
   const OVERLAY_SUBMIT_EVENT = shared.OVERLAY_SUBMIT_EVENT;
   const DRAWING_CHANGE_EVENT = shared.DRAWING_CHANGE_EVENT;
+  const COMPACT_OVERLAY_HEIGHT = shared.COMPACT_OVERLAY_HEIGHT;
 
   const buildSessionDetailUrl = shared.buildSessionDetailUrl;
 
@@ -50,6 +51,8 @@
     annotationCount: 0,
     drawingStrokeCount: 0,
     sessionId: '',
+    overlayHeight: COMPACT_OVERLAY_HEIGHT,
+    overlayPosition: {},
     overlayWidth: 0,
     settingsOpen: false,
   };

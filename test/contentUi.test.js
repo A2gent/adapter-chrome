@@ -180,7 +180,7 @@ test('existing session view treats malformed message history as empty', () => {
   assert.match(html, /Waiting for agent messages\.\.\./);
 });
 
-test('overlay panel docks to the right as a resizable session sidebar', () => {
+test('new session overlay docks to the bottom as a movable compact bar', () => {
   const html = renderOverlay({
     state: baseState(),
     compactOverlayHeight: 176,
@@ -188,16 +188,31 @@ test('overlay panel docks to the right as a resizable session sidebar', () => {
     expandedOverlayMinHeight: 360,
   });
 
+  assert.match(html, /class="panel is-new-session/);
+  assert.match(html, /bottom: var\(--a2gent-overlay-bottom/);
+  assert.match(html, /left: var\(--a2gent-overlay-left/);
+  assert.match(html, /height: min\(var\(--a2gent-overlay-height\)/);
+  assert.match(html, /data-role="resize" title="Drag to resize height"/);
+  assert.doesNotMatch(html, /<div class="panel has-session/);
+});
+
+test('active session overlay docks to the right as a resizable sidebar', () => {
+  const html = renderOverlay({
+    state: baseState({ sessionId: 'session-1' }),
+    compactOverlayHeight: 176,
+    compactOverlayMinHeight: 144,
+    expandedOverlayMinHeight: 360,
+  });
+
+  assert.match(html, /class="panel has-session/);
   assert.match(html, /right:\s*0;/);
   assert.match(html, /top:\s*0;/);
   assert.match(html, /width: var\(--a2gent-overlay-width/);
   assert.match(html, /height:\s*100vh;/);
-  assert.match(html, /\.resize \{[\s\S]*cursor: ew-resize;/);
+  assert.match(html, /\.panel\.has-session \.resize \{[\s\S]*cursor: ew-resize;/);
   assert.match(html, /data-role="resize" title="Drag to resize width"/);
   assert.match(html, /\.create-composer textarea \{[\s\S]*height: 96px;[\s\S]*min-height: 96px;/);
   assert.match(html, /\.followup-row textarea \{ min-height: 72px; \}/);
-  assert.doesNotMatch(html, /--a2gent-overlay-left/);
-  assert.doesNotMatch(html, /--a2gent-overlay-bottom/);
   assert.doesNotMatch(html, /A2gent Browser Adapter/);
   assert.match(html, /data-role="close" class="ghost icon-button" aria-label="Close" title="Close"[\s\S]*<svg class="close-icon"[\s\S]*<path d="M5 5l14 14M19 5L5 19"/);
 });

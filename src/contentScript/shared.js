@@ -21,8 +21,8 @@
   const MAX_DOM_HTML = 180000;
   const MAX_DOM_TEXT = 60000;
   const MAX_NETWORK_ENTRIES = 20;
-  // WHY: the overlay is a right-side chat sidebar so the page stays visible.
-  // WHAT: default to about 30% of the viewport and allow the user to drag-resize width.
+  // WHY: after a session starts the overlay becomes a right-side chat sidebar; before that it stays a bottom bar.
+  // WHAT: default sidebar width to about 30% of the viewport and allow drag-resize.
   const SIDEBAR_OVERLAY_WIDTH_RATIO = 0.3;
   const SIDEBAR_OVERLAY_MIN_WIDTH = 320;
   const SIDEBAR_OVERLAY_MAX_WIDTH_RATIO = 0.8;

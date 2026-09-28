@@ -38,17 +38,18 @@ test('clampOverlayWidth defaults to 30 percent and ignores unset widths', () => 
   assert.equal(clampOverlayWidth(1300, 1400), Math.round(1400 * shared.SIDEBAR_OVERLAY_MAX_WIDTH_RATIO));
 });
 
-test('render wiring resizes the right-side overlay width from the left edge', () => {
+test('render wiring resizes session sidebar width and keeps bottom bar drag before session', () => {
   const renderWiring = readFile('src/contentScript/renderWiring.js');
 
   assert.match(renderWiring, /const clampOverlayWidth = /);
   assert.match(renderWiring, /const applyOverlayLayout = /);
+  assert.match(renderWiring, /usesSessionSidebar\(state\)/);
   assert.match(renderWiring, /shared\.SIDEBAR_OVERLAY_WIDTH_RATIO/);
   assert.match(renderWiring, /startWidth \+ \(startX - moveEvent\.clientX\)/);
   assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-width'/);
-  assert.doesNotMatch(renderWiring, /const startPanelDrag = /);
-  assert.doesNotMatch(renderWiring, /--a2gent-overlay-left/);
-  assert.doesNotMatch(renderWiring, /--a2gent-overlay-bottom/);
+  assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-left'/);
+  assert.match(renderWiring, /host\.style\.setProperty\('--a2gent-overlay-bottom'/);
+  assert.match(renderWiring, /const startPanelDrag = /);
 });
 
 test('overlay rendering is isolated from RTL pages', () => {

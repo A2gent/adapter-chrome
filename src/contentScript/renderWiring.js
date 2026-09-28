@@ -25,6 +25,13 @@
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+  const numericOr = (value, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+
+  const usesSessionSidebar = (state) => Boolean(state?.sessionId);
+
   const clampOverlayWidth = (rawWidth, viewportWidth = window.innerWidth || 320) => {
     const width = Math.max(320, Number(viewportWidth) || 320);
     const minWidth = Math.min(shared.SIDEBAR_OVERLAY_MIN_WIDTH, width - 16);
@@ -35,12 +42,50 @@
     return clamp(chosen, minWidth, maxWidth);
   };
 
-  const applyOverlayLayout = (host, state) => {
-    if (!host || !state) return null;
+  const clampOverlayPosition = (rawPosition = {}, state = {}, shadow = null) => {
+    const viewportWidth = Math.max(320, window.innerWidth || 320);
+    const viewportHeight = Math.max(240, window.innerHeight || 240);
+    const margin = 8;
+    const maxWidth = Math.max(280, viewportWidth - (margin * 2));
+    const defaultWidth = Math.min(760, maxWidth);
+    const width = clamp(numericOr(rawPosition.width, defaultWidth), Math.min(320, maxWidth), maxWidth);
+    const panelHeight = shadow?.querySelector?.('.panel')?.getBoundingClientRect?.().height
+      || Math.max(numericOr(state.overlayHeight, shared.COMPACT_OVERLAY_HEIGHT), shared.COMPACT_OVERLAY_MIN_HEIGHT);
+    const defaultLeft = Math.round((viewportWidth - width) / 2);
+    const left = clamp(numericOr(rawPosition.left, defaultLeft), margin, Math.max(margin, viewportWidth - width - margin));
+    const bottom = clamp(numericOr(rawPosition.bottom, 12), margin, Math.max(margin, viewportHeight - panelHeight - margin));
+    return { left, bottom, width };
+  };
+
+  const applySidebarLayout = (host, state) => {
     const width = clampOverlayWidth(state.overlayWidth);
     state.overlayWidth = width;
     host.style.setProperty('--a2gent-overlay-width', `${Math.round(width)}px`);
+    host.style.removeProperty('--a2gent-overlay-left');
+    host.style.removeProperty('--a2gent-overlay-bottom');
+    host.style.removeProperty('--a2gent-overlay-height');
     return { width };
+  };
+
+  const applyCompactLayout = (host, state, shadow = null) => {
+    const position = clampOverlayPosition(state.overlayPosition, state, shadow);
+    state.overlayPosition = position;
+    host.style.setProperty('--a2gent-overlay-left', `${Math.round(position.left)}px`);
+    host.style.setProperty('--a2gent-overlay-bottom', `${Math.round(position.bottom)}px`);
+    host.style.setProperty('--a2gent-overlay-width', `${Math.round(position.width)}px`);
+    host.style.setProperty(
+      '--a2gent-overlay-height',
+      `${Math.max(numericOr(state.overlayHeight, shared.COMPACT_OVERLAY_HEIGHT), shared.COMPACT_OVERLAY_MIN_HEIGHT)}px`,
+    );
+    return position;
+  };
+
+  const applyOverlayLayout = (host, state, shadow = null) => {
+    if (!host || !state) return null;
+    if (usesSessionSidebar(state)) {
+      return applySidebarLayout(host, state);
+    }
+    return applyCompactLayout(host, state, shadow);
   };
 
   const attachEvents = ({
@@ -126,15 +171,34 @@
     const resize = shadow.querySelector('[data-role="resize"]');
     resize?.addEventListener('pointerdown', (event) => {
       event.preventDefault();
-      const startX = event.clientX;
       const currentState = getState();
-      const startWidth = applyOverlayLayout(host, currentState)?.width || clampOverlayWidth(currentState.overlayWidth);
+      if (usesSessionSidebar(currentState)) {
+        const startX = event.clientX;
+        const startWidth = applySidebarLayout(host, currentState)?.width
+          || clampOverlayWidth(currentState.overlayWidth);
+        const onMove = (moveEvent) => {
+          const nextWidth = clampOverlayWidth(startWidth + (startX - moveEvent.clientX));
+          getState().overlayWidth = nextWidth;
+          applySidebarLayout(host, getState());
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        return;
+      }
+
+      const startY = event.clientY;
+      const minHeight = currentState.settingsOpen ? shared.EXPANDED_OVERLAY_MIN_HEIGHT : shared.COMPACT_OVERLAY_MIN_HEIGHT;
+      const startHeight = Math.max(currentState.overlayHeight, minHeight);
       const onMove = (moveEvent) => {
-        // WHY: the handle sits on the left edge of a right-docked panel.
-        // WHAT: dragging left grows the sidebar; dragging right shrinks it.
-        const nextWidth = clampOverlayWidth(startWidth + (startX - moveEvent.clientX));
-        getState().overlayWidth = nextWidth;
-        applyOverlayLayout(host, getState());
+        const maxHeight = Math.min(640, Math.floor(window.innerHeight * (window.innerWidth < 720 ? 0.6 : 0.9)));
+        const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + (startY - moveEvent.clientY)));
+        getState().overlayHeight = nextHeight;
+        host.style.setProperty('--a2gent-overlay-height', `${nextHeight}px`);
+        applyCompactLayout(host, getState(), shadow);
       };
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
@@ -143,6 +207,36 @@
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     });
+
+    const startPanelDrag = (event) => {
+      if (usesSessionSidebar(getState())) return;
+      if (event.button !== 0) return;
+      if (event.target?.closest?.('button, input, select, textarea, a, [data-role="resize"]')) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const currentState = getState();
+      const startPosition = applyCompactLayout(host, currentState, shadow)
+        || clampOverlayPosition(currentState.overlayPosition, currentState, shadow);
+      const onMove = (moveEvent) => {
+        moveEvent.preventDefault();
+        const nextPosition = clampOverlayPosition({
+          ...startPosition,
+          left: startPosition.left + (moveEvent.clientX - startX),
+          bottom: startPosition.bottom - (moveEvent.clientY - startY),
+        }, getState(), shadow);
+        getState().overlayPosition = nextPosition;
+        applyCompactLayout(host, getState(), shadow);
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+    shadow.querySelector('header')?.addEventListener('pointerdown', startPanelDrag);
+    shadow.querySelector('[data-role="drawing-tools"]')?.addEventListener('pointerdown', startPanelDrag);
   };
 
   const render = ({ getHost, getShadow, getState, attachEvents, readOverlayFocusSnapshot, restoreOverlayFocusSnapshot, consumeShouldFocusPrimaryControl, focusPrimaryControl }) => {
@@ -157,7 +251,7 @@
       pointerEvents: 'none',
       raise: state.open,
     });
-    applyOverlayLayout(host, state);
+    applyOverlayLayout(host, state, shadow);
     if (!state.open) return;
 
     const ui = window.__A2GENT_CONTENT_UI__;
@@ -176,7 +270,7 @@
       expandedOverlayMinHeight: shared.EXPANDED_OVERLAY_MIN_HEIGHT,
     });
     attachEvents();
-    applyOverlayLayout(host, state);
+    applyOverlayLayout(host, state, shadow);
     const messages = shadow.querySelector('.messages');
     if (messages) messages.scrollTop = messages.scrollHeight;
     restoreOverlayFocusSnapshot(focusSnapshot);
@@ -190,5 +284,6 @@
     attachEvents,
     render,
     clampOverlayWidth,
+    usesSessionSidebar,
   };
 });
