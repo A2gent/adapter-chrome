@@ -13,10 +13,9 @@
   const CURSOR_IMAGE_PATH = 'cursor.png';
   const CURSOR_WIDTH_PX = 24;
   const CURSOR_HEIGHT_PX = 35;
-  const POLL_TIMEOUT_MS = 25000;
-  const HIDDEN_POLL_TIMEOUT_MS = 100;
-  const HIDDEN_POLL_INTERVAL_MS = 5000;
-  const POLL_RETRY_MS = 1500;
+  const CONTROL_PORT_NAME = 'A2GENT_BROWSER_CONTROL';
+  const RECONNECT_MS = 1500;
+  const REGISTER_REFRESH_MS = 30000;
   const MAX_TEXT = 60000;
   const MAX_HTML = 180000;
   const MAX_INTERACTIVE_TEXT = 300;
@@ -129,16 +128,6 @@
       scroll_x: window.scrollX,
       scroll_y: window.scrollY,
     },
-  });
-
-  const registerPage = async () => apiFetch('/browser-extension/pages/register', {
-    method: 'POST',
-    body: JSON.stringify({
-      page_id: pageId,
-      client_id: clientId,
-      extension_version: EXTENSION_VERSION,
-      page: pageSnapshot(),
-    }),
   });
 
   const postCommandResult = async (commandId, payload) => apiFetch(`/browser-extension/commands/${encodeURIComponent(commandId)}/result`, {
@@ -586,53 +575,68 @@
     }
   };
 
-  const pollLoop = async () => {
-    for (;;) {
-      const hidden = document.visibilityState === 'hidden';
-      try {
-        const response = await apiFetch(`/browser-extension/pages/${encodeURIComponent(pageId)}/poll`, {
-          method: 'POST',
-          body: JSON.stringify({
-            client_id: clientId,
-            extension_version: EXTENSION_VERSION,
-            timeout_ms: hidden ? HIDDEN_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
-            page: pageSnapshot(),
-          }),
-        });
-        const command = response?.command;
-        if (command?.id) {
-          try {
-            const result = await executeCommand(command);
-            await postCommandResult(command.id, { ok: true, result });
-          } catch (error) {
-            await postCommandResult(command.id, { ok: false, error: error instanceof Error ? error.message : String(error) });
-          }
-        }
-        // WHY: every open tab previously held a 25-second localhost connection, exhausting
-        // Chrome's per-origin pool and making foreground requests such as /projects wait.
-        // WHAT: hidden tabs briefly check their queued commands, then release the socket.
-        if (hidden) {
-          await sleep(HIDDEN_POLL_INTERVAL_MS);
-        }
-      } catch {
-        await sleep(POLL_RETRY_MS);
-      }
+  // WHY: per-tab HTTP polling flooded Brute with requests from every open tab.
+  // WHAT: the service worker multiplexes all tabs over one WebSocket; this tab
+  // registers through a runtime port and gets commands pushed. Results still go
+  // over HTTP so they survive a service worker restart mid-command.
+  let controlPort = null;
+  // Run pushed commands one at a time, like the old poll loop did.
+  let commandChain = Promise.resolve();
+
+  const registerMessage = () => ({
+    type: 'register',
+    page_id: pageId,
+    client_id: clientId,
+    extension_version: EXTENSION_VERSION,
+    page: pageSnapshot(),
+  });
+
+  const sendRegister = () => {
+    try {
+      controlPort?.postMessage(registerMessage());
+    } catch {
+      // The port reconnects from onDisconnect.
     }
   };
 
-  const start = async () => {
-    for (;;) {
-      try {
-        await registerPage();
-        break;
-      } catch {
-        await sleep(POLL_RETRY_MS);
-      }
+  const handleCommand = async (command) => {
+    try {
+      const result = await executeCommand(command);
+      await postCommandResult(command.id, { ok: true, result });
+    } catch (error) {
+      await postCommandResult(command.id, { ok: false, error: error instanceof Error ? error.message : String(error) }).catch(() => {});
     }
-    void pollLoop();
-    window.setInterval(() => {
-      void registerPage().catch(() => {});
-    }, 30000);
+  };
+
+  const connectControlPort = () => {
+    // An invalidated context (extension reloaded) can never reconnect.
+    if (!chrome.runtime?.id) return;
+    try {
+      controlPort = chrome.runtime.connect({ name: CONTROL_PORT_NAME });
+    } catch {
+      controlPort = null;
+      window.setTimeout(connectControlPort, RECONNECT_MS);
+      return;
+    }
+    controlPort.onMessage.addListener((message) => {
+      if (message?.type === 'command' && message.command?.id) {
+        const { command } = message;
+        commandChain = commandChain.then(() => handleCommand(command));
+      }
+    });
+    // The service worker may be suspended or restarted; reconnecting wakes it up.
+    controlPort.onDisconnect.addListener(() => {
+      controlPort = null;
+      window.setTimeout(connectControlPort, RECONNECT_MS);
+    });
+    sendRegister();
+  };
+
+  const start = () => {
+    connectControlPort();
+    // Keep visibility/title fresh so Brute picks the visible tab by default.
+    document.addEventListener?.('visibilitychange', sendRegister);
+    window.setInterval(sendRegister, REGISTER_REFRESH_MS);
   };
 
   void start();

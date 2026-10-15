@@ -222,10 +222,10 @@ const proxiedResponse = (body, status = 200) => ({
   },
 });
 
-const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visible', emptyPollResponses = 0 } = {}) => {
+const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visible' } = {}) => {
   const document = createDocumentMock();
   document.visibilityState = visibilityState;
-  let remainingEmptyPollResponses = emptyPollResponses;
+  const portMessages = [];
   const listeners = new Map();
   const runtimeMessages = [];
   const resultPosts = [];
@@ -319,30 +319,30 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
 
   const chrome = {
     runtime: {
+      id: 'a2gent-test',
       lastError: null,
+      // Mock service worker port: pushes every queued command once the page registers.
+      connect({ name }) {
+        const messageListeners = [];
+        return {
+          name,
+          onMessage: { addListener: (listener) => messageListeners.push(listener) },
+          onDisconnect: { addListener() {} },
+          postMessage(message) {
+            portMessages.push(message);
+            if (message.type !== 'register') return;
+            for (const command of commands.splice(0)) {
+              queueMicrotask(() => messageListeners.forEach((listener) => listener({ type: 'command', page_id: message.page_id, command })));
+            }
+          },
+        };
+      },
       getURL: (assetPath) => `chrome-extension://a2gent/${assetPath}`,
       sendMessage(message, callback) {
         runtimeMessages.push(message);
         if (typeof callback === 'function') {
           if (message.type === 'A2GENT_BRUTE_API_FETCH') {
             const { path: apiPath, options = {} } = message;
-            if (apiPath === '/browser-extension/pages/register') {
-              queueMicrotask(() => callback(proxiedResponse({ registered: true })));
-              return undefined;
-            }
-            if (/\/browser-extension\/pages\/[^/]+\/poll/.test(apiPath)) {
-              if (remainingEmptyPollResponses > 0) {
-                remainingEmptyPollResponses -= 1;
-                queueMicrotask(() => callback(proxiedResponse({ command: null })));
-                return undefined;
-              }
-              if (commands.length === 0) {
-                return undefined;
-              }
-              const command = commands.shift();
-              queueMicrotask(() => callback(proxiedResponse({ command })));
-              return undefined;
-            }
             const resultMatch = apiPath.match(/\/browser-extension\/commands\/([^/]+)\/result/);
             if (resultMatch) {
               resultPosts.push({
@@ -402,22 +402,17 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
   });
 
   new vm.Script(bridgeSource, { filename: path.join(repoRoot, 'src/browserControlBridge.js') }).runInContext(context);
-  return { document, runtimeMessages, resultPosts, waitForResults };
+  return { document, runtimeMessages, portMessages, resultPosts, waitForResults };
 };
 
-test('hidden pages release long-poll connections between short command checks', async () => {
-  const { runtimeMessages } = loadBridge({ visibilityState: 'hidden', emptyPollResponses: 1 });
+test('browser control bridge registers over the service worker port instead of HTTP polling', async () => {
+  const { runtimeMessages, portMessages } = loadBridge({ visibilityState: 'hidden' });
 
   await new Promise((resolve) => setImmediate(resolve));
 
-  const pollMessage = runtimeMessages.find((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path));
-  assert.ok(pollMessage, 'hidden page should still check for queued browser-control commands');
-  assert.equal(JSON.parse(pollMessage.options.body).timeout_ms, 100);
-  assert.equal(
-    runtimeMessages.filter((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path)).length,
-    1,
-    'hidden page should wait before opening its next poll connection',
-  );
+  assert.equal(portMessages[0].type, 'register');
+  assert.equal(portMessages[0].page.visibility_state, 'hidden');
+  assert.equal(runtimeMessages.length, 0, 'idle tabs must not send HTTP requests to Brute');
 });
 
 test('browser control bridge exposes required agent command actions', () => {
@@ -448,7 +443,7 @@ test('browser control bridge exposes required agent command actions', () => {
   assert.doesNotMatch(bridge, /border-radius:999px/, 'virtual cursor should not fall back to the old circular marker');
 });
 
-test('browser control bridge executes polled commands and posts structured results', async () => {
+test('browser control bridge executes pushed commands and posts structured results', async () => {
   const commands = [
     { id: 'text', action: 'get_text' },
     { id: 'content', action: 'read_content' },
@@ -464,15 +459,10 @@ test('browser control bridge executes polled commands and posts structured resul
     { id: 'screenshot', action: 'screenshot' },
     { id: 'eval', action: 'eval', params: { script: '1 + 1' } },
   ];
-  const { document, runtimeMessages, waitForResults } = loadBridge({ commands: commands.slice() });
+  const { document, waitForResults } = loadBridge({ commands: commands.slice() });
 
   const results = await waitForResults(commands.length);
   const byId = Object.fromEntries(results.map((result) => [result.commandId, toPlain(result.payload)]));
-
-  assert.equal(runtimeMessages[0].type, 'A2GENT_BRUTE_API_FETCH');
-  assert.equal(runtimeMessages[0].path, '/browser-extension/pages/register');
-  const pollMessage = runtimeMessages.find((message) => /\/browser-extension\/pages\/[^/]+\/poll/.test(message.path));
-  assert.equal(JSON.parse(pollMessage.options.body).timeout_ms, 25000);
 
   assert.equal(byId.text.ok, true);
   assert.equal(byId.text.result.text, 'Visible body text for the bridge.');
@@ -595,7 +585,7 @@ test('press_key respects cancelled beforeinput events', async () => {
   );
 });
 
-test('browser control bridge posts command errors without stopping polling', async () => {
+test('browser control bridge posts command errors without stopping later commands', async () => {
   const commands = [
     { id: 'missing', action: 'type', params: { selector: '#does-not-exist', text: 'ignored' } },
     { id: 'next', action: 'get_text' },

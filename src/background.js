@@ -168,6 +168,109 @@ const streamBruteResponseToPort = async (port, message) => {
   }
 };
 
+// WHY: per-tab HTTP long-polling hit Brute every few seconds for every open tab.
+// WHAT: the service worker keeps one WebSocket to Brute for all tabs. Tabs connect
+// via a runtime port, register their page_id, and receive pushed commands. The
+// socket is opened only while at least one tab is connected.
+const BROWSER_CONTROL_PORT = 'A2GENT_BROWSER_CONTROL';
+const CONTROL_WS_PATH = '/browser-extension/ws';
+// Chrome 116+ keeps an MV3 service worker alive while WebSocket traffic flows
+// at least every 30s; the ping also refreshes page liveness in Brute.
+const CONTROL_WS_KEEPALIVE_MS = 20000;
+const CONTROL_WS_RECONNECT_MS = 2000;
+
+const controlPages = new Map(); // page_id -> { port, register }
+let controlSocket = null;
+let controlKeepaliveTimer = null;
+let controlReconnectTimer = null;
+
+const sendControl = (message) => {
+  if (controlSocket?.readyState !== WebSocket.OPEN) return false;
+  try {
+    controlSocket.send(JSON.stringify(message));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const scheduleControlReconnect = () => {
+  if (controlReconnectTimer || controlPages.size === 0) return;
+  controlReconnectTimer = setTimeout(() => {
+    controlReconnectTimer = null;
+    void ensureControlSocket();
+  }, CONTROL_WS_RECONNECT_MS);
+};
+
+const ensureControlSocket = async () => {
+  if (controlSocket || controlPages.size === 0) return;
+  let url;
+  try {
+    url = `${(await getBruteBaseUrl()).replace(/^http/, 'ws')}${CONTROL_WS_PATH}`;
+  } catch {
+    scheduleControlReconnect();
+    return;
+  }
+  // Another call may have opened the socket while the base URL was loading.
+  if (controlSocket || controlPages.size === 0) return;
+
+  const socket = new WebSocket(url);
+  controlSocket = socket;
+  socket.onopen = () => {
+    for (const entry of controlPages.values()) sendControl(entry.register);
+    controlKeepaliveTimer = setInterval(() => sendControl({ type: 'ping' }), CONTROL_WS_KEEPALIVE_MS);
+  };
+  socket.onmessage = (event) => {
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (message?.type !== 'command') return;
+    const entry = controlPages.get(message.page_id);
+    if (entry) postPortMessage(entry.port, message);
+  };
+  socket.onclose = () => {
+    if (controlSocket !== socket) return;
+    controlSocket = null;
+    clearInterval(controlKeepaliveTimer);
+    controlKeepaliveTimer = null;
+    scheduleControlReconnect();
+  };
+};
+
+const closeControlSocketIfIdle = () => {
+  if (controlPages.size > 0 || !controlSocket) return;
+  const socket = controlSocket;
+  controlSocket = null;
+  clearInterval(controlKeepaliveTimer);
+  controlKeepaliveTimer = null;
+  socket.close();
+};
+
+const handleBrowserControlPort = (port) => {
+  let pageId = '';
+  port.onMessage.addListener((message) => {
+    if (message?.type !== 'register' || !message.page_id) return;
+    pageId = String(message.page_id);
+    const register = { ...message, type: 'register', page_id: pageId };
+    controlPages.set(pageId, { port, register });
+    if (!sendControl(register)) void ensureControlSocket();
+  });
+  port.onDisconnect.addListener(() => {
+    if (!pageId || controlPages.get(pageId)?.port !== port) return;
+    controlPages.delete(pageId);
+    sendControl({ type: 'unregister', page_id: pageId });
+    closeControlSocketIfIdle();
+  });
+};
+
+chrome.storage.onChanged?.addListener((changes, areaName) => {
+  // Reconnect to the new Brute URL; onclose schedules the reconnect.
+  if (areaName === 'local' && changes[STORAGE_BASE_URL_KEY]) controlSocket?.close();
+});
+
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id || !tab.url || !/^(?:https?|file):\/\//i.test(tab.url)) {
     return;
@@ -185,6 +288,10 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === BROWSER_CONTROL_PORT) {
+    handleBrowserControlPort(port);
+    return;
+  }
   if (port.name !== 'A2GENT_BRUTE_STREAM') return;
 
   let started = false;

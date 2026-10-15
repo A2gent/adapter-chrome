@@ -126,6 +126,9 @@ const loadBackground = (overrides = {}) => {
     console,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
+    WebSocket: overrides.WebSocket,
   });
 
   new vm.Script(backgroundSource, { filename: backgroundPath }).runInContext(context);
@@ -400,4 +403,58 @@ test('background reports Brute stream request errors over extension ports', asyn
   assert.deepEqual(toPlain(postedMessages), [
     { type: 'A2GENT_BRUTE_STREAM_ERROR', requestId: 'request-2', error: 'upstream unavailable' },
   ]);
+});
+
+test('background multiplexes browser-control tabs over one Brute WebSocket', async () => {
+  const sockets = [];
+  class FakeWebSocket {
+    static OPEN = 1;
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.sent = [];
+      sockets.push(this);
+    }
+    send(data) {
+      this.sent.push(JSON.parse(data));
+    }
+    close() {
+      this.readyState = 3;
+      this.closed = true;
+    }
+  }
+  const background = loadBackground({ WebSocket: FakeWebSocket });
+
+  const makePort = () => {
+    const port = {
+      name: 'A2GENT_BROWSER_CONTROL',
+      posted: [],
+      onMessage: { addListener(listener) { port.onMessageListener = listener; } },
+      onDisconnect: { addListener(listener) { port.onDisconnectListener = listener; } },
+      postMessage(payload) { port.posted.push(payload); },
+    };
+    background.onConnect(port);
+    return port;
+  };
+  const first = makePort();
+  const second = makePort();
+  first.onMessageListener({ type: 'register', page_id: 'page-a', page: { title: 'A' } });
+  second.onMessageListener({ type: 'register', page_id: 'page-b', page: { title: 'B' } });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(sockets.length, 1, 'all tabs share one socket');
+  const socket = sockets[0];
+  assert.equal(socket.url, 'ws://localhost:5445/browser-extension/ws');
+  socket.readyState = FakeWebSocket.OPEN;
+  socket.onopen();
+  assert.deepEqual(socket.sent.map((message) => message.page_id), ['page-a', 'page-b']);
+
+  socket.onmessage({ data: JSON.stringify({ type: 'command', page_id: 'page-b', command: { id: 'c1', action: 'get_text' } }) });
+  assert.equal(first.posted.length, 0);
+  assert.equal(second.posted[0].command.id, 'c1');
+
+  first.onDisconnectListener();
+  assert.deepEqual(toPlain(socket.sent.at(-1)), { type: 'unregister', page_id: 'page-a' });
+  second.onDisconnectListener();
+  assert.equal(socket.closed, true, 'socket closes when no tabs remain');
 });
