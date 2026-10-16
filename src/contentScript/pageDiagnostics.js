@@ -121,6 +121,36 @@
     selected_text: getSelectionText(shared.MAX_SELECTED_TEXT_LIGHT) || undefined,
   });
 
+  const compactFocusAnnotation = (annotation) => {
+    if (!annotation) return undefined;
+    // Keep annotation producers unchanged; only the history-bound prompt needs this compact form.
+    const compact = (value) => {
+      if (Array.isArray(value)) return value.map(compact);
+      if (!value || typeof value !== 'object') return value;
+      return Object.fromEntries(Object.entries(value)
+        .filter(([key, item]) => !(['id', 'className'].includes(key) && !item))
+        .map(([key, item]) => [key, key === 'points' && Array.isArray(item)
+          ? item.map((point) => Array.isArray(point) ? point : [point.x, point.y])
+          : compact(item)]));
+    };
+    const { viewport, schema, ...summary } = annotation;
+    return compact(summary);
+  };
+
+  const compactPageErrors = (entries) => {
+    const unique = new Map();
+    for (const entry of helpers.latestByCapturedAt(entries, Number.MAX_SAFE_INTEGER).reverse()) {
+      const key = JSON.stringify([entry.type, entry.message || entry.reason || entry.error, entry.source, entry.lineno, entry.colno]);
+      const previous = unique.get(key);
+      if (previous) {
+        previous.repeat_count = (previous.repeat_count || 1) + 1;
+      } else {
+        unique.set(key, { ...entry });
+      }
+    }
+    return [...unique.values()].slice(0, 20);
+  };
+
   const collectFullDiagnostics = async ({ userPrompt, reason, disableDrawingInput, getDrawingSummary, host, isOverlayOpen }) => {
     disableDrawingInput?.();
     const focusAnnotation = getDrawingSummary?.() || null;
@@ -131,40 +161,29 @@
     return {
       screenshotDataUrl,
       payload: {
-        schema: 'a2gent.browser.diagnostic.v1',
-        source: shared.SOURCE,
-        extension_version: shared.EXTENSION_VERSION,
         diagnostic_bundle_type: reason,
         captured_at: shared.nowIso(),
         page: {
           url: location.href,
           title: document.title,
-          referrer: document.referrer || '',
-          visibility_state: document.visibilityState,
+          referrer: document.referrer || undefined,
           viewport: {
             width: window.innerWidth,
             height: window.innerHeight,
             device_pixel_ratio: window.devicePixelRatio,
-            scroll_x: window.scrollX,
-            scroll_y: window.scrollY,
+            scroll_x: window.scrollX || undefined,
+            scroll_y: window.scrollY || undefined,
           },
-          user_agent: navigator.userAgent,
         },
-        focus_annotation: focusAnnotation || undefined,
-        selected_text: helpers.redactPromptEcho(getSelectionText(shared.MAX_SELECTED_TEXT_FULL), userPrompt),
+        focus_annotation: compactFocusAnnotation(focusAnnotation),
+        selected_text: helpers.redactPromptEcho(getSelectionText(shared.MAX_SELECTED_TEXT_FULL), userPrompt) || undefined,
         console_logs: helpers.compactConsoleActivity(pageDiagnostics.console_logs, 20, userPrompt),
-        page_errors: pageDiagnostics.page_errors || [],
-        exclusions: {
-          cookies: 'excluded by specification; extension does not read document.cookie or Cookie/Set-Cookie headers',
-          browser_storage: 'excluded by specification; extension does not read localStorage, sessionStorage, IndexedDB, Cache Storage, or similar persisted storage',
-          dom_snapshot: 'omitted from automatic diagnostic posts because it can be too large; agents can request page content on demand with browser-control commands',
-          network_activity: 'omitted from automatic diagnostic posts because it can be too large; agents can request network logs on demand with get_network_logs',
-        },
+        page_errors: compactPageErrors(pageDiagnostics.page_errors),
       },
     };
   };
 
-  const jsonBlock = (label, payload) => `\n\n\`\`\`json ${label}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
+  const jsonBlock = (label, payload) => `\n\n\`\`\`json ${label}\n${JSON.stringify(payload)}\n\`\`\``;
 
   const imageFromScreenshot = (dataUrl, name) => {
     const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);

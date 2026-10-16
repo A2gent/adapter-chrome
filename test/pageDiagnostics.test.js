@@ -224,9 +224,9 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
   assert.deepEqual(sentMessages, [{ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }]);
   assert.equal(host.style.visibility, '');
 
-  assert.equal(result.payload.schema, 'a2gent.browser.diagnostic.v1');
-  assert.equal(result.payload.source, shared.SOURCE);
-  assert.equal(result.payload.extension_version, shared.EXTENSION_VERSION);
+  for (const field of ['schema', 'source', 'extension_version', 'exclusions']) {
+    assert.equal(Object.hasOwn(result.payload, field), false);
+  }
   assert.equal(result.payload.diagnostic_bundle_type, 'initial');
   assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'user_prompt'), false);
   assert.deepEqual(result.payload.focus_annotation, { strokes: 1, bounds: { x: 10, y: 20, width: 30, height: 40 } });
@@ -235,7 +235,6 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
     url: 'https://example.test/app?token=secret#debug',
     title: 'Example page',
     referrer: 'https://referrer.example/',
-    visibility_state: 'visible',
     viewport: {
       width: 1280,
       height: 720,
@@ -243,16 +242,12 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
       scroll_x: 12,
       scroll_y: 34,
     },
-    user_agent: 'Unit Test Browser/1.0',
   });
   assert.deepEqual(result.payload.console_logs, [{ captured_at: '2026-01-01T00:00:00.000Z', level: 'info', message: 'ready' }]);
   assert.deepEqual(result.payload.page_errors, [{ message: 'boom' }]);
   assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'dom_snapshot'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(result.payload, 'network_activity'), false);
-  assert.match(result.payload.exclusions.cookies, /does not read document\.cookie/);
-  assert.match(result.payload.exclusions.browser_storage, /does not read localStorage/);
-  assert.match(result.payload.exclusions.dom_snapshot, /omitted from automatic diagnostic posts/);
-  assert.match(result.payload.exclusions.network_activity, /get_network_logs/);
+
 });
 
 test('message helpers append labeled JSON payloads and strip screenshot data-url prefixes', () => {
@@ -266,11 +261,11 @@ test('message helpers append labeled JSON payloads and strip screenshot data-url
   });
   assert.match(
     pageDiagnostics.createInitialMessage('Initial prompt', diagnosticPayload),
-    /^Initial prompt\n\n```json a2gent_browser_diagnostic\n[\s\S]*"ok": true[\s\S]*```$/,
+    /^Initial prompt\n\n```json a2gent_browser_diagnostic\n[\s\S]*"ok":true[\s\S]*```$/,
   );
   assert.match(
     pageDiagnostics.createFollowupMessage('Follow up', lightweightPayload),
-    /^Follow up\n\n```json a2gent_browser_context\n[\s\S]*"schema": "a2gent\.browser\.lightweight_context\.v1"[\s\S]*```$/,
+    /^Follow up\n\n```json a2gent_browser_context\n[\s\S]*"schema":"a2gent\.browser\.lightweight_context\.v1"[\s\S]*```$/,
   );
   assert.match(
     pageDiagnostics.createRecaptureMessage(diagnosticPayload),
@@ -332,4 +327,92 @@ test('imageFromScreenshot preserves the actual MIME type and matches the filenam
     });
   }
   assert.throws(() => pageDiagnostics.imageFromScreenshot('not an image', 'capture.png'), /Invalid screenshot/);
+});
+
+
+test('initial diagnostics omit defaults and compact annotation references without mutating them', async (t) => {
+  installBrowserGlobals(t, { pageDiagnosticsPayload: {
+    console_logs: [{ captured_at: '2026-01-01T00:00:00.000Z', level: 'info', message: 'Application ready' }],
+    page_errors: [{ captured_at: '2026-01-01T00:00:01.000Z', type: 'error', message: 'Request failed', source: 'app.js', lineno: 42 }],
+  } });
+  document.referrer = '';
+  window.scrollX = 0;
+  window.scrollY = 0;
+  window.getSelection = () => ({ toString: () => '' });
+  const annotation = {
+    schema: 'a2gent.browser.annotation.v2',
+    type: 'numbered_references',
+    viewport: { width: 1280, height: 720, device_pixel_ratio: 2 },
+    annotation_count: 2,
+    references: [
+      { number: 1, type: 'element', text: 'Fix this button', element: { tag: 'BUTTON', id: '', className: '', text: 'Save' } },
+      { number: 2, type: 'element', text: 'Inspect this section', element: { tag: 'SECTION', id: 'main', className: 'content' } },
+    ],
+    strokes: [{ points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] }],
+  };
+  const original = structuredClone(annotation);
+  const { payload } = await pageDiagnostics.collectFullDiagnostics({
+    userPrompt: 'Inspect this page', reason: 'initial', getDrawingSummary: () => annotation,
+  });
+  const serialized = JSON.stringify(payload);
+  const wire = JSON.parse(serialized);
+  assert.equal(Object.hasOwn(wire.page, 'referrer'), false);
+  assert.equal(Object.hasOwn(wire, 'selected_text'), false);
+  assert.deepEqual(wire.page.viewport, { width: 1280, height: 720, device_pixel_ratio: 2 });
+  const { schema, viewport, ...expected } = structuredClone(original);
+  delete expected.references[0].element.id;
+  delete expected.references[0].element.className;
+  expected.strokes = [{ points: [[10, 20], [30, 40]] }];
+  assert.deepEqual(wire.focus_annotation, expected);
+  assert.deepEqual(annotation, original);
+  assert.ok(serialized.length < 1000, `Representative payload was ${serialized.length} chars`);
+  t.diagnostic(`Representative compact payload: ${serialized.length} chars`);
+});
+
+test('page errors collapse nonconsecutive identical messages and retain the latest 20 unique errors', async (t) => {
+  const entries = Array.from({ length: 25 }, (_, index) => ({
+    captured_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    type: 'error', message: `Failure ${index}`, source: 'app.js', lineno: index + 1,
+  }));
+  entries.push({ ...entries[24], captured_at: '2026-01-01T00:01:00.000Z' });
+  entries.push({ type: 'unhandledrejection', reason: 'Rejected promise' });
+  entries.push({ type: 'unhandledrejection', reason: 'Rejected promise' });
+  const original = structuredClone(entries);
+  installBrowserGlobals(t, { pageDiagnosticsPayload: { page_errors: entries } });
+  const { payload } = await pageDiagnostics.collectFullDiagnostics({ reason: 'initial' });
+  assert.equal(payload.page_errors.length, 20);
+  assert.deepEqual(payload.page_errors[0], { ...entries[25], repeat_count: 2 });
+  assert.equal(payload.page_errors.at(-1).message, 'Failure 5');
+  assert.deepEqual(entries, original);
+});
+
+test('page error compaction preserves unhandled rejections and handles missing errors', async (t) => {
+  const diagnostics = { page_errors: [
+    { type: 'unhandledrejection', reason: 'Promise failed' },
+    { type: 'error', message: 'Other failure' },
+    { type: 'unhandledrejection', reason: 'Promise failed' },
+  ] };
+  installBrowserGlobals(t, { pageDiagnosticsPayload: diagnostics });
+  const { payload } = await pageDiagnostics.collectFullDiagnostics({ reason: 'initial' });
+  assert.deepEqual(payload.page_errors, [
+    { type: 'unhandledrejection', reason: 'Promise failed', repeat_count: 2 },
+    { type: 'error', message: 'Other failure' },
+  ]);
+  delete diagnostics.page_errors;
+  const empty = await pageDiagnostics.collectFullDiagnostics({ reason: 'initial' });
+  assert.deepEqual(empty.payload.page_errors, []);
+  assert.equal(empty.payload.focus_annotation, undefined);
+});
+
+
+test('page errors with the same message at different locations stay distinct', async (t) => {
+  const entries = [
+    { type: 'error', message: 'Failed', source: 'a.js', lineno: 1, colno: 2 },
+    { type: 'error', message: 'Failed', source: 'b.js', lineno: 1, colno: 2 },
+    { type: 'error', message: 'Failed', source: 'a.js', lineno: 2, colno: 2 },
+    { type: 'error', message: 'Failed', source: 'a.js', lineno: 1, colno: 3 },
+  ];
+  installBrowserGlobals(t, { pageDiagnosticsPayload: { page_errors: entries } });
+  const { payload } = await pageDiagnostics.collectFullDiagnostics({ reason: 'initial' });
+  assert.deepEqual(payload.page_errors, entries.toReversed());
 });

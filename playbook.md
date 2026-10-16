@@ -10,3 +10,5 @@
 - CDP `Extensions.loadUnpacked` succeeding does not guarantee `Extensions.triggerAction` is allowed. If Chrome rejects the action, report UI/session verification as pending rather than treating injected-helper checks as end-to-end validation.
 
 - A macOS Chrome launcher PID may exit before cleanup. Close a temporary browser through CDP or tolerate an already-exited PID.
+
+- When minifying diagnostic JSON, update both exact string assertions and regexes that assumed spaces after colons.
