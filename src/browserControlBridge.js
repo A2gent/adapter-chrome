@@ -10,6 +10,8 @@
   const EXTENSION_VERSION = '0.1.0';
   const PAGE_ID_KEY = 'a2gent.adapterChrome.pageId';
   const CURSOR_ID = 'a2gent-browser-adapter-ai-cursor';
+  const CONTROL_HIGHLIGHT_ID = 'a2gent-browser-adapter-control-highlight';
+  const CONTROL_IDLE_TIMEOUT_MS = 30000;
   const CURSOR_IMAGE_PATH = 'cursor.png';
   const CURSOR_WIDTH_PX = 24;
   const CURSOR_HEIGHT_PX = 35;
@@ -138,6 +140,55 @@
       ...payload,
     }),
   });
+
+  const ensureControlHighlight = () => {
+    let highlight = document.getElementById(CONTROL_HIGHLIGHT_ID);
+    if (highlight) return highlight;
+    highlight = document.createElement('div');
+    highlight.id = CONTROL_HIGHLIGHT_ID;
+    highlight.setAttribute('aria-hidden', 'true');
+    highlight.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:2147483645',
+      'border:2px solid rgba(91,177,255,.72)',
+      'box-shadow:inset 0 0 22px 3px rgba(31,135,255,.27),inset 0 0 76px rgba(31,135,255,.12)',
+      'background:linear-gradient(180deg,rgba(48,143,255,.12),transparent 24%,transparent 76%,rgba(48,143,255,.1))',
+      'pointer-events:none',
+      'opacity:0',
+      'transition:opacity 220ms ease-out',
+    ].join(';');
+    document.documentElement.appendChild(highlight);
+    return highlight;
+  };
+
+  let controlIdleTimer = null;
+  const endControlSession = () => {
+    if (controlIdleTimer !== null) {
+      window.clearTimeout(controlIdleTimer);
+      controlIdleTimer = null;
+    }
+    const highlight = document.getElementById(CONTROL_HIGHLIGHT_ID);
+    if (highlight) highlight.style.opacity = '0';
+    const cursor = document.getElementById(CURSOR_ID);
+    if (cursor) cursor.style.opacity = '0';
+  };
+
+  const startControlSession = () => {
+    if (controlIdleTimer !== null) {
+      window.clearTimeout(controlIdleTimer);
+      controlIdleTimer = null;
+    }
+    ensureControlHighlight().style.opacity = '1';
+    // Do not leave the last pointer position visible when a new control burst starts.
+    const cursor = document.getElementById(CURSOR_ID);
+    if (cursor) cursor.style.opacity = '0';
+  };
+
+  const scheduleControlSessionEnd = () => {
+    if (controlIdleTimer !== null) window.clearTimeout(controlIdleTimer);
+    controlIdleTimer = window.setTimeout(endControlSession, CONTROL_IDLE_TIMEOUT_MS);
+  };
 
   const ensureCursor = () => {
     let cursor = document.getElementById(CURSOR_ID);
@@ -600,11 +651,14 @@
   };
 
   const handleCommand = async (command) => {
+    startControlSession();
     try {
       const result = await executeCommand(command);
       await postCommandResult(command.id, { ok: true, result });
     } catch (error) {
       await postCommandResult(command.id, { ok: false, error: error instanceof Error ? error.message : String(error) }).catch(() => {});
+    } finally {
+      scheduleControlSessionEnd();
     }
   };
 
@@ -627,6 +681,7 @@
     // The service worker may be suspended or restarted; reconnecting wakes it up.
     controlPort.onDisconnect.addListener(() => {
       controlPort = null;
+      endControlSession();
       window.setTimeout(connectControlPort, RECONNECT_MS);
     });
     sendRegister();

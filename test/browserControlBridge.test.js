@@ -231,6 +231,8 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
   const resultPosts = [];
   const waiters = [];
   const storageValues = {};
+  const timers = new Map();
+  let controlDisconnectListener = null;
   let timerId = 0;
 
   const maybeResolveWaiters = () => {
@@ -258,12 +260,18 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
     getSelection: () => ({ toString: () => '  selected text  ' }),
     setTimeout(callback, ms) {
       const id = ++timerId;
+      timers.set(id, callback);
       if (Number(ms) <= 100) {
-        queueMicrotask(callback);
+        queueMicrotask(() => {
+          timers.delete(id);
+          callback();
+        });
       }
       return id;
     },
-    clearTimeout() {},
+    clearTimeout(id) {
+      timers.delete(id);
+    },
     setInterval() {
       return ++timerId;
     },
@@ -327,7 +335,7 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
         return {
           name,
           onMessage: { addListener: (listener) => messageListeners.push(listener) },
-          onDisconnect: { addListener() {} },
+          onDisconnect: { addListener: (listener) => { controlDisconnectListener = listener; } },
           postMessage(message) {
             portMessages.push(message);
             if (message.type !== 'register') return;
@@ -402,7 +410,22 @@ const loadBridge = ({ commands = [], diagnosticsPayload, visibilityState = 'visi
   });
 
   new vm.Script(bridgeSource, { filename: path.join(repoRoot, 'src/browserControlBridge.js') }).runInContext(context);
-  return { document, runtimeMessages, portMessages, resultPosts, waitForResults };
+  return {
+    document,
+    runtimeMessages,
+    portMessages,
+    resultPosts,
+    waitForResults,
+    expireTimers() {
+      for (const [id, callback] of [...timers]) {
+        timers.delete(id);
+        callback();
+      }
+    },
+    disconnectControlPort() {
+      controlDisconnectListener?.();
+    },
+  };
 };
 
 test('browser control bridge registers over the service worker port instead of HTTP polling', async () => {
@@ -438,6 +461,9 @@ test('browser control bridge exposes required agent command actions', () => {
   }
 
   assert.match(bridge, /a2gent-browser-adapter-ai-cursor/, 'bridge should render a visible virtual AI cursor');
+  assert.match(bridge, /a2gent-browser-adapter-control-highlight/, 'bridge should render a page-border control indicator');
+  assert.match(bridge, /rgba\(91,177,255,\.72\)/, 'control indicator should use a translucent blue border');
+  assert.match(bridge, /CONTROL_IDLE_TIMEOUT_MS = 30000/, 'control visuals should expire after an idle period');
   assert.match(bridge, /CURSOR_IMAGE_PATH = 'cursor\.png'/, 'virtual cursor should use the bundled cursor asset');
   assert.match(bridge, /CURSOR_WIDTH_PX = 24/, 'virtual cursor should render near normal pointer size');
   assert.doesNotMatch(bridge, /border-radius:999px/, 'virtual cursor should not fall back to the old circular marker');
@@ -459,7 +485,7 @@ test('browser control bridge executes pushed commands and posts structured resul
     { id: 'screenshot', action: 'screenshot' },
     { id: 'eval', action: 'eval', params: { script: '1 + 1' } },
   ];
-  const { document, waitForResults } = loadBridge({ commands: commands.slice() });
+  const { document, waitForResults, expireTimers } = loadBridge({ commands: commands.slice() });
 
   const results = await waitForResults(commands.length);
   const byId = Object.fromEntries(results.map((result) => [result.commandId, toPlain(result.payload)]));
@@ -537,6 +563,29 @@ test('browser control bridge executes pushed commands and posts structured resul
     media_type: 'image/png',
   });
   assert.deepEqual(byId.eval.result, { value: { evaluated: '1 + 1' } });
+
+
+test('browser control bridge immediately hides its visuals when the control port disconnects', async () => {
+  const { document, waitForResults, disconnectControlPort } = loadBridge({
+    commands: [{ id: 'move', action: 'move_mouse', params: { x: 20, y: 30 } }],
+  });
+  await waitForResults(1);
+
+  const highlight = document.getElementById('a2gent-browser-adapter-control-highlight');
+  const cursor = document.getElementById('a2gent-browser-adapter-ai-cursor');
+  assert.equal(highlight.style.opacity, '1');
+  assert.equal(cursor.style.opacity, '1');
+
+  disconnectControlPort();
+  assert.equal(highlight.style.opacity, '0');
+  assert.equal(cursor.style.opacity, '0');
+});
+  const highlight = document.getElementById('a2gent-browser-adapter-control-highlight');
+  assert.equal(highlight.style.opacity, '1', 'page border should signal active browser control');
+  assert.equal(cursor.style.opacity, '1', 'virtual cursor should be visible while the session is active');
+  expireTimers();
+  assert.equal(highlight.style.opacity, '0', 'page border should fade after browser-control inactivity');
+  assert.equal(cursor.style.opacity, '0', 'virtual cursor should be hidden when browser control ends');
 });
 
 test('press_key applies native text-editing defaults to focused input controls', async () => {

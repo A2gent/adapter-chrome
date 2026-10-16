@@ -105,7 +105,7 @@ Aside from those explicit exclusions, the MVP diagnostic bundle may contain high
 
 ## Agent browser control cursor
 
-When an external agent controls the page through the browser adapter, the extension renders a visible virtual cursor. The cursor uses the bundled `cursor.png` asset, exposed via MV3 `web_accessible_resources`, and displays it at normal pointer scale so the cursor tip aligns with click/move command coordinates without obscuring the page.
+When an external agent controls the page through the browser adapter, the extension renders a visible virtual cursor and a subtle blue, translucent gradient around the viewport edges. The border and cursor identify active browser control without intercepting page input. They fade after 30 seconds without a new browser-control command, and hide immediately if the control connection disconnects.
 
 ## Inline continuation
 
