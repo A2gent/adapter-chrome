@@ -25,6 +25,7 @@ const loadBackground = (overrides = {}) => {
     executeScripts: [],
     createdTabs: [],
     updatedTabs: [],
+    removedTabs: [],
     capturedTabs: [],
     fetches: [],
   };
@@ -97,6 +98,10 @@ const loadBackground = (overrides = {}) => {
         }
         if (callback) callback();
         else return Promise.resolve({ id: 42, windowId: 7 });
+      },
+      async remove(tabId) {
+        calls.removedTabs.push(tabId);
+        if (overrides.removeTab) return overrides.removeTab(tabId);
       },
       async update(tabId, details) {
         calls.updatedTabs.push({ tabId, details });
@@ -540,6 +545,44 @@ test('navigate keeps registration until its result is posted even if source port
   await new Promise(setImmediate);
   assert.equal(control.socket.sent.at(-1).type, 'unregister');
   assert.equal(control.socket.readyState, 3);
+});
+
+test('close_tab closes the selected tab and returns success after its port disconnects', async (t) => {
+  let control;
+  let acknowledge;
+  control = await setupTabControl({
+    removeTab(tabId) {
+      control.port.disconnect();
+      return Promise.resolve(tabId);
+    },
+    fetch() {
+      return new Promise((resolve) => {
+        acknowledge = () => resolve({ ok: true, status: 200, async text() { return '{}'; } });
+      });
+    },
+  });
+  t.after(() => control.cleanup());
+  control.command('close_tab');
+  await new Promise(setImmediate);
+  assert.deepEqual(toPlain(control.calls.removedTabs), [17]);
+  assert.deepEqual(JSON.parse(control.calls.fetches[0].init.body), {
+    page_id: 'page-1', ok: true, result: { tab_id: 17, closed: true },
+  });
+  assert.equal(control.socket.sent.some((m) => m.type === 'unregister'), false);
+  acknowledge();
+  await new Promise(setImmediate);
+  assert.equal(control.socket.sent.at(-1).type, 'unregister');
+  assert.equal(control.socket.readyState, 3);
+});
+
+test('close_tab reports Chrome tab removal failures', async (t) => {
+  const control = await setupTabControl({ removeTab() { throw new Error('Tab removal denied'); } });
+  t.after(() => control.cleanup());
+  control.command('close_tab');
+  await new Promise(setImmediate);
+  const result = JSON.parse(control.calls.fetches.at(-1).init.body);
+  assert.equal(result.ok, false);
+  assert.ok(result.error.endsWith('Tab removal denied'));
 });
 
 test('tab commands reject missing, malformed and unsafe URLs without touching tabs', async (t) => {

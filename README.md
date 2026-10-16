@@ -33,18 +33,21 @@ On `https://` pages the content scripts do **not** fetch `http://localhost` dire
 
 ## Agent tab navigation
 
-The `chrome_extension` tool supports `open_tab` and `navigate` with an absolute
-HTTP(S) `url`. Both run in the service worker through `chrome.tabs`, without
-page `eval`, popup gestures, or host-page CSP restrictions. No additional
-manifest permissions are required.
+The `chrome_extension` tool supports `open_tab`, `navigate`, and `close_tab`.
+The first two take an absolute HTTP(S) `url`. All three run in the service
+worker through `chrome.tabs`, without page `eval`, popup gestures, or host-page
+CSP restrictions. No additional manifest permissions are required.
 
 - `open_tab` opens a new active tab and leaves the source page intact.
 - `navigate` changes the tab belonging to the selected `page_id`.
-- Both require an existing extension-connected source page. Use `list_pages`
-  first and pass its `page_id` explicitly when selecting a navigation target.
-- Results contain `tab_id`, `window_id`, and the requested `url`. They confirm
-  the tab operation, not that the destination has finished loading. Call
-  `list_pages` again to find the destination `page_id`, then read its content.
+- `close_tab` closes the tab belonging to the selected `page_id`.
+- All three commands require an existing extension-connected source page. Use
+  `list_pages` first and pass its `page_id` explicitly for the target tab.
+- `open_tab` and `navigate` results contain `tab_id`, `window_id`, and the
+  requested `url`; they confirm the tab operation, not that the destination
+  has finished loading. `close_tab` returns the closed `tab_id`. After opening
+  or navigating, call `list_pages` to find the destination `page_id`, then read
+  its content.
 - Non-HTTP(S) URLs (including `javascript:`, `data:`, `file:`, and `chrome:`)
   are rejected. Existing file-page support is unchanged.
 

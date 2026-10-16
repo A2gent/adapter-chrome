@@ -14,3 +14,7 @@
 - When minifying diagnostic JSON, update both exact string assertions and regexes that assumed spaces after colons.
 
 - Chrome API mocks throw host-realm errors into the background VM. Existing `instanceof Error` formatting may include an `Error:` prefix; assert the error detail rather than assuming identical realm formatting.
+
+- Run component-relative edits and tests from the component repository root, not the session working directory if it is nested beneath a package.
+
+- File-edit tool paths resolve from the project root, unlike bash commands with a component workdir. Use project-relative paths (for example `adapter-chrome/...`) with file-edit tools.
