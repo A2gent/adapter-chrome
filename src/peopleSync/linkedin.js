@@ -92,6 +92,27 @@
     return [...profiles.values()];
   };
 
+  // The visual row of a list profile, found without relying on obfuscated class names: climb from
+  // the profile link while the ancestor still links to no other profile.
+  const rowElement = (doc, slug) => {
+    const scope = doc.querySelector('main') || doc.body;
+    const anchor = [...scope.querySelectorAll('a[href*="/in/"]')].find((candidate) => profileSlug(candidate.getAttribute('href')) === slug);
+    if (!anchor) return null;
+    let row = anchor;
+    for (let parent = row.parentElement; parent && parent !== scope; parent = parent.parentElement) {
+      const others = [...parent.querySelectorAll('a[href*="/in/"]')].some((other) => profileSlug(other.getAttribute('href')) !== slug);
+      if (others) break;
+      row = parent;
+    }
+    return row === anchor ? anchor.parentElement : row;
+  };
+
+  // Profile top card: the section holding the name heading.
+  const profileHeader = (doc) => {
+    const h1 = (doc.querySelector('main') || doc.body)?.querySelector('h1');
+    return h1?.closest('section') || h1?.parentElement || null;
+  };
+
   // Map of linkedin slug -> person card, built from the cards' socials.linkedin.
   const linkedPeople = (people) => {
     const map = new Map();
@@ -108,5 +129,5 @@
     return (people || []).find((person) => [person.name, ...(person.aliases || [])].some((value) => clean(value).toLowerCase() === target)) || null;
   };
 
-  return { profileSlug, canonicalUrl, pageKind, textLines, splitHeadline, parseProfile, parseList, linkedPeople, suggestPerson };
+  return { profileSlug, canonicalUrl, pageKind, textLines, splitHeadline, parseProfile, parseList, rowElement, profileHeader, linkedPeople, suggestPerson };
 });
