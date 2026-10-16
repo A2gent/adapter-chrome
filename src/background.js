@@ -229,7 +229,12 @@ const ensureControlSocket = async () => {
     }
     if (message?.type !== 'command') return;
     const entry = controlPages.get(message.page_id);
-    if (entry) postPortMessage(entry.port, message);
+    if (!entry) return;
+    if (['open_tab', 'navigate'].includes(message.command?.action)) {
+      void handleTabCommand(message, entry).catch((error) => console.warn('Tab command result failed:', errorMessage(error)));
+    } else {
+      postPortMessage(entry.port, message);
+    }
   };
   socket.onclose = () => {
     if (controlSocket !== socket) return;
@@ -249,20 +254,62 @@ const closeControlSocketIfIdle = () => {
   socket.close();
 };
 
+const unregisterControlPage = (pageId, entry) => {
+  if (controlPages.get(pageId) !== entry) return;
+  controlPages.delete(pageId);
+  sendControl({ type: 'unregister', page_id: pageId });
+  closeControlSocketIfIdle();
+};
+
+const handleTabCommand = async (message, entry) => {
+  const { command, page_id: pageId } = message;
+  entry.pendingTabCommands = (entry.pendingTabCommands || 0) + 1;
+  const payload = { page_id: pageId, ok: false };
+  try {
+    const url = new URL(String(command.params?.url || '').trim());
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('Tab URL must use http:// or https://.');
+    }
+    const tabId = entry.port.sender?.tab?.id;
+    if (!Number.isInteger(tabId)) throw new Error('Browser control requires a sender tab.');
+    const tab = command.action === 'open_tab'
+      ? await chrome.tabs.create({ url: url.href, active: true })
+      : await chrome.tabs.update(tabId, { url: url.href });
+    payload.ok = true;
+    payload.result = { tab_id: tab.id, window_id: tab.windowId, url: url.href };
+  } catch (error) {
+    payload.error = errorMessage(error);
+  }
+  try {
+    // Navigation can destroy the source port before tabs.update resolves. Keep
+    // its server registration until the result is acknowledged, or Brute fails
+    // the pending command as disconnected instead of returning its result.
+    await fetchBruteJson({
+      path: `/browser-extension/commands/${encodeURIComponent(command.id)}/result`,
+      options: { method: 'POST', body: JSON.stringify(payload) },
+    });
+  } finally {
+    entry.pendingTabCommands -= 1;
+    if (entry.disconnected && !entry.pendingTabCommands) unregisterControlPage(pageId, entry);
+  }
+};
+
 const handleBrowserControlPort = (port) => {
   let pageId = '';
   port.onMessage.addListener((message) => {
     if (message?.type !== 'register' || !message.page_id) return;
     pageId = String(message.page_id);
     const register = { ...message, type: 'register', page_id: pageId };
-    controlPages.set(pageId, { port, register });
+    const existing = controlPages.get(pageId);
+    if (existing?.port === port) existing.register = register;
+    else controlPages.set(pageId, { port, register });
     if (!sendControl(register)) void ensureControlSocket();
   });
   port.onDisconnect.addListener(() => {
     if (!pageId || controlPages.get(pageId)?.port !== port) return;
-    controlPages.delete(pageId);
-    sendControl({ type: 'unregister', page_id: pageId });
-    closeControlSocketIfIdle();
+    const entry = controlPages.get(pageId);
+    entry.disconnected = true;
+    if (!entry.pendingTabCommands) unregisterControlPage(pageId, entry);
   });
 };
 

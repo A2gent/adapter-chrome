@@ -24,6 +24,7 @@ const loadBackground = (overrides = {}) => {
     sendMessages: [],
     executeScripts: [],
     createdTabs: [],
+    updatedTabs: [],
     capturedTabs: [],
     fetches: [],
   };
@@ -92,10 +93,15 @@ const loadBackground = (overrides = {}) => {
       create(details, callback) {
         calls.createdTabs.push(details);
         if (overrides.createTab) {
-          overrides.createTab(details, callback, runtime);
-          return;
+          return overrides.createTab(details, callback, runtime);
         }
         if (callback) callback();
+        else return Promise.resolve({ id: 42, windowId: 7 });
+      },
+      async update(tabId, details) {
+        calls.updatedTabs.push({ tabId, details });
+        if (overrides.updateTab) return overrides.updateTab(tabId, details);
+        return { id: tabId, windowId: 7 };
       },
     },
   };
@@ -457,4 +463,113 @@ test('background multiplexes browser-control tabs over one Brute WebSocket', asy
   assert.deepEqual(toPlain(socket.sent.at(-1)), { type: 'unregister', page_id: 'page-a' });
   second.onDisconnectListener();
   assert.equal(socket.closed, true, 'socket closes when no tabs remain');
+});
+
+const setupTabControl = async (overrides = {}) => {
+  let socket;
+  class FakeWebSocket {
+    static OPEN = 1;
+    constructor() {
+      socket = this;
+      this.readyState = 1;
+      this.sent = [];
+    }
+    send(data) { this.sent.push(JSON.parse(data)); }
+    close() { this.readyState = 3; }
+  }
+  const background = loadBackground({ ...overrides, WebSocket: FakeWebSocket });
+  const port = {
+    name: 'A2GENT_BROWSER_CONTROL',
+    sender: { tab: { id: 17, windowId: 7 } },
+    posted: [],
+    onMessage: { addListener(fn) { port.register = fn; } },
+    onDisconnect: { addListener(fn) { port.disconnect = fn; } },
+    postMessage(message) { port.posted.push(message); },
+  };
+  background.onConnect(port);
+  port.register({ type: 'register', page_id: 'page-1' });
+  await new Promise(setImmediate);
+  socket.onopen();
+  return {
+    ...background, port, socket,
+    command(action, url) {
+      socket.onmessage({ data: JSON.stringify({
+        type: 'command', page_id: 'page-1', command: { id: 'tab-cmd', action, params: { url } },
+      }) });
+    },
+    cleanup() { port.disconnect(); },
+  };
+};
+
+test('open_tab uses Chrome tabs API without page eval or popup windows', async (t) => {
+  const control = await setupTabControl();
+  t.after(() => control.cleanup());
+  control.command('open_tab', 'https://www.linkedin.com/messaging/');
+  await new Promise(setImmediate);
+  assert.deepEqual(toPlain(control.calls.createdTabs), [{ url: 'https://www.linkedin.com/messaging/', active: true }]);
+  assert.equal(control.port.posted.length, 0);
+  assert.equal(control.calls.executeScripts.length, 0);
+  assert.equal(control.calls.fetches[0].url, 'http://localhost:5445/browser-extension/commands/tab-cmd/result');
+  assert.deepEqual(JSON.parse(control.calls.fetches[0].init.body), {
+    page_id: 'page-1', ok: true,
+    result: { tab_id: 42, window_id: 7, url: 'https://www.linkedin.com/messaging/' },
+  });
+});
+
+test('navigate keeps registration until its result is posted even if source port disconnects', async (t) => {
+  let control;
+  let acknowledge;
+  control = await setupTabControl({
+    async updateTab(tabId) {
+      control.port.disconnect();
+      return { id: tabId, windowId: 7 };
+    },
+    fetch() {
+      return new Promise((resolve) => {
+        acknowledge = () => resolve({ ok: true, status: 200, async text() { return '{}'; } });
+      });
+    },
+  });
+  t.after(() => control.cleanup());
+  control.command('navigate', 'https://example.test/next');
+  await new Promise(setImmediate);
+  assert.deepEqual(toPlain(control.calls.updatedTabs), [{ tabId: 17, details: { url: 'https://example.test/next' } }]);
+  assert.equal(JSON.parse(control.calls.fetches[0].init.body).ok, true);
+  assert.equal(control.socket.sent.some((m) => m.type === 'unregister'), false);
+  acknowledge();
+  await new Promise(setImmediate);
+  assert.equal(control.socket.sent.at(-1).type, 'unregister');
+  assert.equal(control.socket.readyState, 3);
+});
+
+test('tab commands reject missing, malformed and unsafe URLs without touching tabs', async (t) => {
+  const control = await setupTabControl();
+  t.after(() => control.cleanup());
+  for (const action of ['open_tab', 'navigate']) {
+    for (const url of [undefined, '', '/relative', 'javascript:alert(1)', 'data:text/html,hi', 'file:///tmp/a', 'chrome://extensions']) {
+      control.command(action, url);
+      await new Promise(setImmediate);
+      const result = JSON.parse(control.calls.fetches.at(-1).init.body);
+      assert.equal(result.ok, false, `${action}: ${url}`);
+      assert.ok(result.error);
+    }
+  }
+  assert.equal(control.calls.createdTabs.length, 0);
+  assert.equal(control.calls.updatedTabs.length, 0);
+});
+
+test('tab API failures are returned as command errors', async (t) => {
+  const control = await setupTabControl({
+    createTab() { return Promise.reject(new Error('Tab creation denied')); },
+    updateTab() { throw new Error('Tab no longer exists'); },
+  });
+  t.after(() => control.cleanup());
+  for (const [action, error] of [['open_tab', 'Tab creation denied'], ['navigate', 'Tab no longer exists']]) {
+    control.command(action, 'https://example.test/');
+    await new Promise(setImmediate);
+    const result = JSON.parse(control.calls.fetches.at(-1).init.body);
+    assert.equal(result.page_id, 'page-1');
+    assert.equal(result.ok, false);
+    assert.ok(result.error.endsWith(error));
+  }
 });

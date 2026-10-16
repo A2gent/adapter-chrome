@@ -31,6 +31,27 @@ The extension defaults to `http://localhost:5445`. The new-session form selects 
 
 On `https://` pages the content scripts do **not** fetch `http://localhost` directly. Chrome treats that as a public-origin-to-loopback Private Network Access request and blocks it before normal CORS headers can help. Instead, the content scripts send messages to the extension background service worker, and the service worker performs Brute HTTP requests using the loopback `host_permissions` declared in `manifest.json`. If HTTPS pages show `loopback address space` errors, reload the unpacked extension so the latest background proxy code is active.
 
+## Agent tab navigation
+
+The `chrome_extension` tool supports `open_tab` and `navigate` with an absolute
+HTTP(S) `url`. Both run in the service worker through `chrome.tabs`, without
+page `eval`, popup gestures, or host-page CSP restrictions. No additional
+manifest permissions are required.
+
+- `open_tab` opens a new active tab and leaves the source page intact.
+- `navigate` changes the tab belonging to the selected `page_id`.
+- Both require an existing extension-connected source page. Use `list_pages`
+  first and pass its `page_id` explicitly when selecting a navigation target.
+- Results contain `tab_id`, `window_id`, and the requested `url`. They confirm
+  the tab operation, not that the destination has finished loading. Call
+  `list_pages` again to find the destination `page_id`, then read its content.
+- Non-HTTP(S) URLs (including `javascript:`, `data:`, `file:`, and `chrome:`)
+  are rejected. Existing file-page support is unchanged.
+
+After updating, reload the extension in `chrome://extensions`, refresh a source
+page to reconnect its content script, and restart/update Brute so the new tool
+schema is available. A running session may need to refresh its tool definitions.
+
 ## Host page event isolation
 
 The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped in both the extension's isolated content-script world and the page's main world before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay. Composer textareas use chat-style keyboard behavior: `Enter` submits the current prompt/follow-up, while `Shift+Enter` inserts a newline. The overlay also preserves textarea/input focus and selection across internal re-renders, preventing focus from falling back to the host page while projects load or session status updates.

@@ -12,3 +12,5 @@
 - A macOS Chrome launcher PID may exit before cleanup. Close a temporary browser through CDP or tolerate an already-exited PID.
 
 - When minifying diagnostic JSON, update both exact string assertions and regexes that assumed spaces after colons.
+
+- Chrome API mocks throw host-realm errors into the background VM. Existing `instanceof Error` formatting may include an `Error:` prefix; assert the error detail rather than assuming identical realm formatting.
