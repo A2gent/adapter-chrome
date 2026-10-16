@@ -17,13 +17,15 @@ select,input{font-size:inherit;font-family:inherit;min-width:0;padding:3px 5px;b
 .row input,.row select{width:120px}.row.stack{flex-wrap:wrap}.row.stack .who{flex-basis:100%}.row.stack input,.row.stack select{flex:1}button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:inherit;font-family:inherit}
 button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color:#127a3a;max-width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .err,.note{padding:5px 8px;color:#b42318}.note{color:#127a3a;overflow-wrap:anywhere;user-select:text;max-height:96px;overflow:auto}.err:empty,.note:empty{display:none}
-.sum{padding:5px 8px;color:#667}.sum:empty{display:none}`;
+.sum{padding:5px 8px;color:#667}.sum:empty{display:none}
+.combo{flex:1;min-width:0;display:flex;flex-direction:column}.row .combo input{width:auto}.list{max-height:180px;overflow:auto;margin-top:2px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.list[hidden]{display:none}.grp{position:sticky;top:0;padding:2px 6px;font-size:11px;font-weight:600;color:#667;background:#f3f5f9}.opt{padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.opt:hover,.opt.on{background:#e3edfb}`;
   // Widgets injected into LinkedIn rows/top card: same controls, without the panel chrome and name column.
   const INLINE_STYLE = `:host{all:initial;display:block;flex-basis:100%;width:100%;margin:6px 0 2px;font:13px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
 *{box-sizing:border-box;font-family:inherit}.row{display:flex;gap:6px;align-items:center;max-width:520px}.logo{font-weight:700;color:#0a66c2}
 select,input{font-size:inherit;font-family:inherit;min-width:0;flex:1;padding:3px 5px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:inherit;font-family:inherit}
-button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color:#127a3a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}`;
+button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color:#127a3a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.combo{flex:1;min-width:0;display:flex;flex-direction:column}.row .combo input{width:auto}.list{max-height:180px;overflow:auto;margin-top:2px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.list[hidden]{display:none}.grp{position:sticky;top:0;padding:2px 6px;font-size:11px;font-weight:600;color:#667;background:#f3f5f9}.opt{padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.opt:hover,.opt.on{background:#e3edfb}`;
   const INLINE_ATTR = 'data-a2gent-people-sync';
 
   let host; let shadow; let visible = true; let enabled = false;
@@ -138,28 +140,87 @@ button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color
         : null;
       return el('div', { className: 'row' }, who, el('span', { className: 'ok', textContent: `✓ ${person.name}`, title: person.path }), refresh);
     }
-    // A native <select> instead of <datalist>: datalist popups do not work reliably inside the shadow root.
+    // A custom combobox: <datalist> popups do not work inside the shadow root and a flat <select> is hard to
+    // search. The list is in-flow (not a floating popup) so LinkedIn's overflow:hidden containers cannot clip it.
     const suggested = linkedin.suggestPerson(people, profile.name);
-    const select = el('select', { title: 'Link to an existing person or create a new card' },
-      el('option', { value: '', textContent: '+ New card' }),
-      ...people.map((candidate) => el('option', { value: candidate.path, textContent: candidate.name, selected: candidate.path === suggested?.path })));
-    const input = el('input', { placeholder: profile.name, value: profile.name, title: 'New card name' });
+    let chosen = suggested?.path || '';
+    let active = 0;
+    let typed = false;
+    const input = el('input', { placeholder: 'Search person or new name', value: suggested?.name || profile.name, title: 'Type to search people or name a new card' });
+    const list = el('div', { className: 'list', hidden: true });
     const button = el('button', { disabled: busy === profile.slug || !projectId });
     const update = () => {
-      const existing = select.value !== '';
-      input.hidden = existing;
-      button.textContent = existing ? '🔗' : '+';
-      button.title = existing ? 'Link to the selected person and sync' : 'Create person card and sync';
+      button.textContent = chosen ? '🔗' : '+';
+      button.title = chosen ? 'Link to the selected person and sync' : 'Create person card and sync';
     };
-    button.onclick = () => sync(profile, select.value ? { path: select.value } : { name: input.value.trim() });
-    select.addEventListener('change', update);
+    const pick = (path, name) => {
+      chosen = path;
+      input.value = name;
+      list.hidden = true;
+      typed = false;
+      update();
+    };
+    // Options grouped by the person's first group; the "new card" option always comes first.
+    const refreshList = () => {
+      // Until the user types, show everyone: the prefilled profile name must not hide the candidates.
+      const query = (typed && !chosen ? input.value : '').trim().toLowerCase();
+      const options = [{ path: '', name: input.value.trim() || profile.name, label: `+ New card: ${input.value.trim() || profile.name}` }];
+      const groups = new Map();
+      for (const person of people) {
+        if (query && ![person.name, ...(person.aliases || [])].some((value) => String(value || '').toLowerCase().includes(query))) continue;
+        const group = person.groups?.[0] || 'Other';
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(person);
+      }
+      const names = [...groups.keys()].sort((x, y) => (x === 'Other') - (y === 'Other') || x.localeCompare(y));
+      const children = [];
+      const addOption = (option, label) => {
+        const index = children.filter((child) => child.className.startsWith('opt')).length;
+        children.push(el('div', {
+          className: index === active ? 'opt on' : 'opt', textContent: label, title: option.path,
+          // mousedown (not click) with preventDefault keeps focus in the input so blur does not close the list first.
+          onmousedown: (event) => { event.preventDefault(); pick(option.path, option.path ? option.name : input.value.trim() || profile.name); },
+        }));
+        option.index = index;
+      };
+      const all = [options[0]];
+      addOption(options[0], options[0].label);
+      for (const name of names) {
+        children.push(el('div', { className: 'grp', textContent: name }));
+        for (const person of groups.get(name).sort((x, y) => x.name.localeCompare(y.name))) {
+          all.push(person);
+          addOption(person, person.name);
+        }
+      }
+      active = Math.min(active, all.length - 1);
+      list.replaceChildren(...children);
+      list.options = all;
+    };
+    const open = () => { refreshList(); list.hidden = false; };
+    input.addEventListener('input', () => { chosen = ''; typed = true; active = 0; update(); open(); });
+    input.addEventListener('focus', () => { input.select(); open(); });
+    input.addEventListener('blur', () => { list.hidden = true; });
     // Keep LinkedIn keyboard shortcuts away from the input.
     input.addEventListener('keydown', (event) => {
       event.stopPropagation();
-      if (event.key === 'Enter') button.click();
+      const count = list.options?.length || 0;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (list.hidden) { open(); return; }
+        active = (active + (event.key === 'ArrowDown' ? 1 : count - 1)) % Math.max(count, 1);
+        refreshList();
+        list.querySelector('.on')?.scrollIntoView?.({ block: 'nearest' });
+      } else if (event.key === 'Escape') {
+        list.hidden = true;
+      } else if (event.key === 'Enter') {
+        const option = !list.hidden && list.options?.[active];
+        if (option) pick(option.path, option.path ? option.name : input.value.trim() || profile.name);
+        else button.click();
+      }
     });
+    button.onclick = () => sync(profile, chosen ? { path: chosen } : { name: input.value.trim() });
     update();
-    return el('div', { className: 'row' }, who, select, input, button);
+    return el('div', { className: 'row' }, who, el('div', { className: 'combo' }, input, list), button);
   };
 
   const removeInline = () => {

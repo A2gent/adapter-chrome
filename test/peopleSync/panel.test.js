@@ -78,7 +78,7 @@ test('sync mode panel links an unknown profile to an existing person chosen in t
   const calls = [];
   const responses = {
     'GET /projects': [{ id: 'p1', name: 'CRM', folder: '/tmp/crm' }],
-    'GET /projects/p1/people': { people: [{ path: 'People/Boss.md', name: 'Boss', socials: {} }] },
+    'GET /projects/p1/people': { people: [{ path: 'People/Boss.md', name: 'Boss', groups: ['Mentors'], socials: {} }] },
     'POST /projects/p1/people': { path: 'People/Anna K.md', name: 'Anna K' },
     'PUT /projects/p1/people/linkedin-sync': { path: 'People/Boss.md' },
   };
@@ -115,9 +115,15 @@ test('sync mode panel links an unknown profile to an existing person chosen in t
 
   const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
   await settle();
-  const select = find('.row select');
-  select.value = 'People/Boss.md';
-  select.dispatchEvent(new window.Event('change'));
+  const input = find('.row input');
+  input.dispatchEvent(new window.Event('focus'));
+  // People are grouped under their group header and filterable by typing.
+  assert.equal(find('.grp').textContent, 'Mentors');
+  input.value = 'bos';
+  input.dispatchEvent(new window.Event('input'));
+  const option = [...shadows.flatMap((root) => [...root.querySelectorAll('.opt')])].find((node) => node.textContent === 'Boss');
+  option.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  assert.equal(input.value, 'Boss');
   const button = find('.row button');
   assert.equal(button.textContent, '🔗');
   button.click();
