@@ -356,6 +356,22 @@
     return { left, top };
   };
 
+  const keepFloatingPanelInViewport = (panel) => {
+    const bounds = panel.getBoundingClientRect();
+    const padding = 10;
+    const left = Math.min(Math.max(bounds.left, padding), Math.max(padding, window.innerWidth - bounds.width - padding));
+    const top = Math.min(Math.max(bounds.top, padding), Math.max(padding, window.innerHeight - bounds.height - padding));
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+  };
+
+  const keepOpenPanelsInViewport = () => {
+    [editorRole, tooltipRole].forEach((role) => {
+      const panel = shadow?.querySelector(role);
+      if (panel) keepFloatingPanelInViewport(panel);
+    });
+  };
+
   const showTooltip = (annotation) => {
     closeTooltip();
     if (!shadow) return;
@@ -367,6 +383,7 @@
     tooltip.style.left = `${Math.round(position.left)}px`;
     tooltip.style.top = `${Math.round(position.top)}px`;
     shadow.querySelector('.wrap')?.appendChild(tooltip);
+    keepFloatingPanelInViewport(tooltip);
   };
 
   const annotationTypeLabel = (type) => {
@@ -409,6 +426,8 @@
       </div>
     `;
     shadow.querySelector('.wrap')?.appendChild(editor);
+    // Use the rendered dimensions so the full Done/Delete row stays visible even when the note grows.
+    keepFloatingPanelInViewport(editor);
     const textarea = editor.querySelector('[data-role="annotation-text"]');
     textarea?.addEventListener('input', (event) => updateAnnotationText(annotation.number, event.target.value, { emit: false }));
     editor.querySelector('[data-role="annotation-delete"]')?.addEventListener('click', (event) => {
@@ -585,7 +604,11 @@
         .annotation-editor {
           position: fixed;
           z-index: 5;
+          box-sizing: border-box;
           width: 280px;
+          height: 200px;
+          max-width: calc(100vw - 20px);
+          max-height: calc(100vh - 20px);
           display: grid;
           gap: 8px;
           padding: 10px;
@@ -594,6 +617,7 @@
           background: rgba(17, 24, 39, .96);
           color: #f9fafb;
           box-shadow: 0 14px 42px rgba(0,0,0,.38);
+          overflow: auto;
           pointer-events: auto;
         }
         .annotation-editor label { display: grid; gap: 6px; }
@@ -610,7 +634,7 @@
           outline: none;
         }
         .annotation-editor textarea:focus { border-color: rgba(255, 209, 102, .95); }
-        .editor-actions { display: flex; justify-content: flex-end; gap: 7px; }
+        .editor-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 7px; padding-top: 4px; background: rgba(17, 24, 39, .96); }
       </style>
       <div class="wrap">
         <div class="surface" data-role="surface" aria-label="A2gent numbered annotation surface"></div>
@@ -702,7 +726,10 @@
       commitElementFromPoint(event.clientX, event.clientY);
     }, { capture: true });
 
-    window.addEventListener('resize', scheduleRedraw);
+    window.addEventListener('resize', () => {
+      scheduleRedraw();
+      keepOpenPanelsInViewport();
+    });
     window.addEventListener('scroll', scheduleRedraw, { passive: true });
     redraw();
     applyVisibility();

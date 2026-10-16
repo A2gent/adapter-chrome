@@ -51,3 +51,13 @@ test('annotation editor commits reference text only when Done is clicked', () =>
   assert.match(source, /emitChange\(\{ committedReference: \{ number: committed\.number, type: committed\.type, text: committed\.text \} \}\)/);
   assert.doesNotMatch(source, /updatedReference/);
 });
+
+test('annotation editors stay within the viewport using their rendered dimensions', () => {
+  assert.match(source, /const keepFloatingPanelInViewport = \(panel\) => \{\s*const bounds = panel\.getBoundingClientRect\(\);/);
+  assert.match(source, /window\.innerWidth - bounds\.width - padding/);
+  assert.match(source, /window\.innerHeight - bounds\.height - padding/);
+  assert.match(source, /appendChild\(editor\);\s*\/\/ Use the rendered dimensions[\s\S]*?keepFloatingPanelInViewport\(editor\);/);
+  assert.match(source, /window\.addEventListener\('resize', \(\) => \{[\s\S]*keepOpenPanelsInViewport\(\);/);
+  assert.match(source, /\.annotation-editor \{[\s\S]*box-sizing: border-box;[\s\S]*width: 280px;\s*height: 200px;[\s\S]*max-width: calc\(100vw - 20px\);[\s\S]*max-height: calc\(100vh - 20px\);[\s\S]*overflow: auto;/);
+  assert.match(source, /\.editor-actions \{ position: sticky; bottom: 0;/);
+});
