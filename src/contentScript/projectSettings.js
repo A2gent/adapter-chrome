@@ -34,6 +34,7 @@
     render,
   }) => {
     const storedBaseUrl = await shared.storageGet(shared.STORAGE_BASE_URL_KEY);
+    const storedProjectId = await shared.storageGet(shared.STORAGE_SELECTED_PROJECT_KEY);
     const storedLaunch = await shared.storageGet(shared.STORAGE_SESSION_LAUNCH_KEY) || {};
     const baseUrl = storedBaseUrl || shared.DEFAULT_BRUTE_BASE_URL;
     setRawState({ ...getState(), baseUrl });
@@ -46,7 +47,9 @@
         listUnifiedAgents ? listUnifiedAgents().catch(() => []) : Promise.resolve([]),
       ]);
       const detection = matching.detectProject(projects || [], location.href);
-      const selectedProjectId = detection.projectId || '';
+      // Keep URL matching authoritative, but restore the user's previous manual choice otherwise.
+      const rememberedProject = (projects || []).find((project) => project.id === storedProjectId);
+      const selectedProjectId = detection.projectId || rememberedProject?.id || '';
       const projectAgents = selectedProjectId && listUnifiedAgents
         ? await listUnifiedAgents(selectedProjectId).catch(() => [])
         : [];
@@ -133,6 +136,7 @@
       selectedAgentId: selectedAgent.id,
       models: sessionLaunch.shouldShowProviderControls(selectedAgent) ? getState().models : [],
     });
+    await shared.storageSet(shared.STORAGE_SELECTED_PROJECT_KEY, projectId);
     await persistLaunchPrefs(getState, { agentId: selectedAgent.id });
   };
 

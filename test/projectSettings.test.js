@@ -89,6 +89,81 @@ test('loadSettingsAndProjects hydrates project, provider, model, and host agent 
   });
 });
 
+test('loadSettingsAndProjects restores the last selected project when no URL match exists', async (t) => {
+  const stored = { [shared.STORAGE_SELECTED_PROJECT_KEY]: 'proj-remembered' };
+  withChrome(t, {
+    storage: {
+      local: {
+        get(keys, callback) {
+          const key = Array.isArray(keys) ? keys[0] : keys;
+          callback({ [key]: stored[key] });
+        },
+        set(payload, callback) {
+          Object.assign(stored, payload);
+          callback();
+        },
+      },
+    },
+  });
+
+  const box = createStateBox();
+  const listUnifiedAgents = async (projectId = '') => (
+    projectId ? [{ id: `${projectId}-agent`, name: 'Project agent', runtime: 'docker', project_id: projectId }] : []
+  );
+  await projectSettings.loadSettingsAndProjects({
+    ...box,
+    listProjects: async () => [
+      { id: 'proj-remembered', name: 'Remembered project' },
+      { id: 'proj-next', name: 'Next project' },
+    ],
+    listProviders: async () => [],
+    listUnifiedAgents,
+  });
+
+  assert.equal(box.getState().selectedProjectId, 'proj-remembered');
+  assert.ok(box.getState().agents.some((agent) => agent.project_id === 'proj-remembered'));
+
+  await projectSettings.changeProject({ ...box, listUnifiedAgents, projectId: 'proj-next' });
+  assert.equal(stored[shared.STORAGE_SELECTED_PROJECT_KEY], 'proj-next');
+});
+
+test('URL matching overrides a remembered project and missing saved projects are ignored', async (t) => {
+  const stored = { [shared.STORAGE_SELECTED_PROJECT_KEY]: 'proj-remembered' };
+  withChrome(t, {
+    storage: {
+      local: {
+        get(keys, callback) {
+          const key = Array.isArray(keys) ? keys[0] : keys;
+          callback({ [key]: stored[key] });
+        },
+        set(payload, callback) {
+          Object.assign(stored, payload);
+          callback();
+        },
+      },
+    },
+  });
+
+  const listProjects = async () => [
+    { id: 'proj-matched', name: 'Matched project', url_patterns: ['https://app.example.test/*'] },
+    { id: 'proj-remembered', name: 'Remembered project' },
+  ];
+  const loadOptions = {
+    listProjects,
+    listProviders: async () => [],
+    listUnifiedAgents: async () => [],
+  };
+  let box = createStateBox();
+  await projectSettings.loadSettingsAndProjects({ ...box, ...loadOptions });
+  assert.equal(box.getState().selectedProjectId, 'proj-matched');
+
+  stored[shared.STORAGE_SELECTED_PROJECT_KEY] = 'proj-deleted';
+  global.location.href = 'https://unmatched.example.test/';
+  box = createStateBox();
+  await projectSettings.loadSettingsAndProjects({ ...box, ...loadOptions });
+  assert.equal(box.getState().selectedProjectId, '');
+});
+
 test('provider and agent changes persist launch prefs and hide models for docker agents', async (t) => {
   const stored = {};
   withChrome(t, {

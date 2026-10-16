@@ -10,6 +10,7 @@
   const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
   const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
   const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
+  const STORAGE_SELECTED_PROJECT_KEY = 'a2gent.adapterChrome.selectedProject';
   const STORAGE_SESSION_LAUNCH_KEY = 'a2gent.adapterChrome.sessionLaunch';
   const SOURCE = 'adapter-chrome';
   const EXTENSION_VERSION = '0.1.0';
@@ -213,6 +214,7 @@
     DEFAULT_BRUTE_BASE_URL,
     DEFAULT_CAESAR_BASE_URL,
     STORAGE_BASE_URL_KEY,
+    STORAGE_SELECTED_PROJECT_KEY,
     STORAGE_SESSION_LAUNCH_KEY,
     SOURCE,
     EXTENSION_VERSION,
