@@ -1,7 +1,7 @@
 import { extractArticle } from './article.js';
 import { mountPlayer } from './ui.js';
 const send = message => chrome.runtime.sendMessage({target:'background', ...message});
-// Audio mode (default) shows the player; design mode hides it so the session overlay owns the page.
+// Audio mode (default) shows the player; design and sync modes hide it so they own the page.
 const MODE_KEY = 'a2gent.adapterChrome.mode';
 let audioMode = true;
 let mounted; let href = location.href; let scheduled; let lastScan = 0;
@@ -30,7 +30,7 @@ const observer = new MutationObserver(() => {
 });
 observer.observe(document.documentElement, {childList:true, subtree:true});
 function applyMode(mode) {
-  audioMode = mode !== 'design';
+  audioMode = mode !== 'design' && mode !== 'sync';
   if (audioMode) { scan(); return; }
   clearTimeout(scheduled); scheduled = null;
   // destroy() also stops any playback owned by this tab.

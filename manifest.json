@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "A2gent Brute Browser Adapter",
   "version": "0.1.0",
-  "description": "Create and continue local Brute sessions from the current page (design mode) or listen to articles aloud with HearHear (audio mode, default).",
+  "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), or sync LinkedIn profiles into Brute person cards (sync mode).",
   "action": {
     "default_title": "A2gent: toggle overlay / HearHear player (right-click to switch mode)",
     "default_icon": {
@@ -85,6 +85,16 @@
       ],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "src/peopleSync/linkedin.js",
+        "src/peopleSync/panel.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

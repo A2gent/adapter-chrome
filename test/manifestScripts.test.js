@@ -10,7 +10,9 @@ const exists = (relativePath) => fs.existsSync(path.join(repoRoot, relativePath)
 
 test('manifest content scripts support web pages and local files', () => {
   // The HearHear bundle is http(s)-only: articles are not read from local files.
-  for (const entry of manifest.content_scripts.filter((item) => !item.js.includes('dist/hearhear-content.js'))) {
+  // LinkedIn sync mode scripts run only on LinkedIn.
+  const scoped = (item) => item.js.includes('dist/hearhear-content.js') || item.js.includes('src/peopleSync/panel.js');
+  for (const entry of manifest.content_scripts.filter((item) => !scoped(item))) {
     assert.deepEqual(entry.matches, ['http://*/*', 'https://*/*', 'file:///*']);
   }
 });
@@ -36,6 +38,8 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/contentScript/renderWiring.js',
     'src/contentScript.js',
     'src/browserControlBridge.js',
+    'src/peopleSync/linkedin.js',
+    'src/peopleSync/panel.js',
   ]);
 
   for (const relativePath of scriptFiles) {
@@ -67,4 +71,12 @@ test('manifest wires the HearHear audio bundle, offscreen document and options p
   for (const permission of ['offscreen', 'contextMenus']) assert.ok(manifest.permissions.includes(permission));
   assert.equal(manifest.options_page, 'hearhear/options.html');
   assert.equal(exists('hearhear/offscreen.html'), true);
+});
+
+test('manifest loads LinkedIn sync scripts only on LinkedIn, after the shared helpers', () => {
+  const entry = manifest.content_scripts.find((item) => item.js.includes('src/peopleSync/panel.js'));
+  assert.deepEqual(entry.matches, ['https://www.linkedin.com/*']);
+  assert.deepEqual(entry.js, ['src/peopleSync/linkedin.js', 'src/peopleSync/panel.js']);
+  // panel.js relies on shared.js from the document_start entry that also matches LinkedIn.
+  assert.equal(entry.run_at, 'document_idle');
 });

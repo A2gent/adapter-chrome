@@ -8,10 +8,11 @@ Features:
 
 <img width="1598" height="800" alt="Screenshot 2026-06-20 at 00 59 42" src="https://github.com/user-attachments/assets/7bf47a1e-dbb3-4fef-a0c1-eb4e3ef96e9a" />
 
-## Modes: audio (default) and design
+## Modes: audio (default), design and sync
 
 - **Audio** (default): HearHear reads articles aloud via the local Brute Speech API. The player appears on article pages; the toolbar icon shows/hides it. Source: `src/hearhear/`, options page: `hearhear/options.html` (Brute URL, TTS model).
 - **Design**: the HearHear player is removed from pages and the toolbar icon toggles the session overlay (as before).
+- **Sync** (LinkedIn → People): on LinkedIn profile pages and people lists (search, My Network, company/school people) a panel lists the profiles on the page. Each profile is matched to a Brute person card by `socials.linkedin`; unlinked ones get a name field (pre-filled when a card name/alias matches) and a 🔗 link / + create button. Syncing calls `PUT /projects/{id}/people/linkedin-sync`: it sets `socials.linkedin`, fills empty `role` / `company` / `location`, and rewrites the card's `## LinkedIn` section (headline, about, experience, education). Use ↻ on a profile page to refresh a linked card; list rows only link, since they lack profile details. The people project defaults to the adapter's selected project and is remembered per panel. Source: `src/peopleSync/`.
 - Switch with the toolbar icon's right-click menu (stored in `chrome.storage.local` as `a2gent.adapterChrome.mode`).
 - HearHear is ES modules, so run `npm install && npm run build` before loading the unpacked extension (outputs `dist/`, git-ignored).
 

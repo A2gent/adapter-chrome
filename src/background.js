@@ -328,8 +328,13 @@ chrome.storage.onChanged?.addListener((changes, areaName) => {
   if (areaName === 'local' && changes[STORAGE_BASE_URL_KEY]) controlSocket?.close();
 });
 
-// Audio (HearHear player, default) vs design (session overlay) mode, switched from the toolbar icon's context menu.
-const getMode = async () => ((await storageGet(STORAGE_MODE_KEY)) === 'design' ? 'design' : 'audio');
+// Audio (HearHear player, default), design (session overlay) or sync (LinkedIn -> person cards) mode,
+// switched from the toolbar icon's context menu.
+const MODES = ['audio', 'design', 'sync'];
+const getMode = async () => {
+  const mode = await storageGet(STORAGE_MODE_KEY);
+  return MODES.includes(mode) ? mode : 'audio';
+};
 
 chrome.runtime.onInstalled?.addListener(async () => {
   if (!chrome.contextMenus) return;
@@ -337,11 +342,12 @@ chrome.runtime.onInstalled?.addListener(async () => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'audio', type: 'radio', title: 'Audio mode (HearHear)', contexts: ['action'], checked: mode === 'audio' });
     chrome.contextMenus.create({ id: 'design', type: 'radio', title: 'Design mode (sessions)', contexts: ['action'], checked: mode === 'design' });
+    chrome.contextMenus.create({ id: 'sync', type: 'radio', title: 'Sync mode (LinkedIn → People)', contexts: ['action'], checked: mode === 'sync' });
   });
 });
 
 chrome.contextMenus?.onClicked.addListener((info) => {
-  if (info.menuItemId === 'audio' || info.menuItemId === 'design') {
+  if (MODES.includes(info.menuItemId)) {
     chrome.storage.local.set({ [STORAGE_MODE_KEY]: info.menuItemId });
   }
 });
@@ -354,6 +360,12 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (await getMode() === 'audio') {
     // The icon shows/hides the HearHear player; pages without a detected article have none.
     await chrome.tabs.sendMessage(tab.id, { target: 'content', action: 'toggleVisibility' }).catch(() => {});
+    return;
+  }
+
+  if (await getMode() === 'sync') {
+    // The icon shows/hides the people sync panel; only LinkedIn pages have one.
+    await chrome.tabs.sendMessage(tab.id, { type: 'A2GENT_PEOPLE_SYNC_TOGGLE' }).catch(() => {});
     return;
   }
 

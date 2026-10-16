@@ -629,3 +629,15 @@ test('background action click toggles the HearHear player in the default audio m
   }]);
   assert.equal(background.calls.executeScripts.length, 0);
 });
+
+test('background action click toggles the people sync panel in sync mode', async () => {
+  const background = loadBackground({ storageValues: { 'a2gent.adapterChrome.mode': 'sync' } });
+
+  await background.onActionClick({ id: 123, url: 'https://www.linkedin.com/in/anna/' });
+
+  assert.deepEqual(toPlain(background.calls.sendMessages), [{
+    tabId: 123,
+    message: { type: 'A2GENT_PEOPLE_SYNC_TOGGLE' },
+  }]);
+  assert.equal(background.calls.executeScripts.length, 0);
+});
