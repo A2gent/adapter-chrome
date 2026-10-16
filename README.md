@@ -65,6 +65,10 @@ Creating a session is an explicit user-initiated diagnosis action. The extension
 - Visible-page screenshot as an image attachment. If the user uses **Annotate** first, the screenshot includes numbered arrow/region markers only; annotation note text is copied into the prompt as `N: text` references and compact `focus_annotation` JSON references, not rendered over the page.
 - Console logs and runtime/page errors observed after the extension hook loaded.
 
+Session screenshots are normalized to CSS pixels using the page's `devicePixelRatio`, capped at a 1280 px long edge (`SCREENSHOT_MAX_LONG_EDGE` in `src/contentScript/pageDiagnostics.js`), and encoded as JPEG at quality 0.8. Numbered markers remain in the full-page view; no extra annotation crop is attached. Attachment MIME type and filename extension match the encoded image. Browser-control screenshots are unchanged.
+
+To verify a release, reload the unpacked extension and the host page, activate that tab, add numbered annotations, and create a session. Check marker readability at the output's native size. Inspect the initial user message's image attachment metadata for `image/jpeg` and a `.jpg` filename, then decode the stored image to confirm its long edge is at most 1280 px. Repeat with **Full recapture & send**. Payload size varies with page content; 100-200 KB is a target, not a hard limit.
+
 DOM/text snapshots and browser-observed fetch/XHR network records are omitted from automatic diagnostic posts because they can be too large. Agents can request page content or network logs on demand through browser-control commands when needed.
 
 The diagnostic bundle is embedded as a machine-readable JSON block in the Brute message text. Screenshots are sent as Brute image attachments. Created sessions include metadata labels such as `source: "adapter-chrome"` and `created_by: "adapter-chrome-extension"`, so Caesar can display that they came from the extension.

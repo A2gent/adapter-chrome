@@ -32,6 +32,42 @@
     window.postMessage({ type: 'A2GENT_GET_PAGE_DIAGNOSTICS', requestId }, '*');
   });
 
+  const SCREENSHOT_MAX_LONG_EDGE = 1280;
+  const SCREENSHOT_JPEG_QUALITY = 0.8;
+
+  const screenshotDimensions = (width, height, devicePixelRatio = 1) => {
+    const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+    const scale = Math.min(1 / ratio, SCREENSHOT_MAX_LONG_EDGE / Math.max(width, height));
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale)),
+    };
+  };
+
+  const compressScreenshot = async (dataUrl, devicePixelRatio) => {
+    // Decode locally: host-page CSP can block fetch(data:...) in content scripts.
+    const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), (char) => char.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'image/png' });
+    const bitmap = await createImageBitmap(blob);
+    try {
+      // Remove retina density before bounding upload size; annotations remain in page CSS coordinates.
+      const { width, height } = screenshotDimensions(bitmap.width, bitmap.height, devicePixelRatio);
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext('2d', { alpha: false });
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, width, height);
+      const encoded = await canvas.convertToBlob({ type: 'image/jpeg', quality: SCREENSHOT_JPEG_QUALITY });
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(encoded);
+      });
+    } finally {
+      bitmap.close();
+    }
+  };
+
   const captureScreenshot = async ({ host, isOverlayOpen }) => {
     const previousVisibility = host?.style.visibility || '';
     const shouldHideAdapterPanel = Boolean(host && isOverlayOpen);
@@ -46,7 +82,7 @@
       if (!response || !response.ok || !response.dataUrl) {
         throw new Error(response?.error || 'Failed to capture visible tab.');
       }
-      return response.dataUrl;
+      return await compressScreenshot(response.dataUrl, window.devicePixelRatio);
     } finally {
       if (shouldHideAdapterPanel && host) {
         host.style.visibility = previousVisibility;
@@ -130,11 +166,16 @@
 
   const jsonBlock = (label, payload) => `\n\n\`\`\`json ${label}\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
 
-  const imageFromScreenshot = (dataUrl, name) => ({
-    name,
-    media_type: 'image/png',
-    data_base64: dataUrl.replace(/^data:image\/png;base64,/, ''),
-  });
+  const imageFromScreenshot = (dataUrl, name) => {
+    const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(dataUrl);
+    if (!match) throw new Error('Invalid screenshot image data URL.');
+    const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[match[1]];
+    return {
+      name: name.replace(/\.(?:png|jpe?g|webp)$/i, `.${extension}`),
+      media_type: match[1],
+      data_base64: match[2],
+    };
+  };
 
   const createInitialMessage = (prompt, diagnosticsPayload) => `${prompt}${jsonBlock('a2gent_browser_diagnostic', diagnosticsPayload)}`;
   const createFollowupMessage = (prompt, lightweightPayload) => `${prompt}${jsonBlock('a2gent_browser_context', lightweightPayload)}`;
@@ -143,6 +184,8 @@
   return {
     getSelectionText,
     getPageDiagnosticsFromMainWorld,
+    SCREENSHOT_MAX_LONG_EDGE,
+    screenshotDimensions,
     captureScreenshot,
     collectDomSnapshot,
     collectLightweightRefresh,

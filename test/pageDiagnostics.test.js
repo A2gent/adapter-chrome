@@ -124,8 +124,34 @@ const installBrowserGlobals = (t, { pageDiagnosticsPayload } = {}) => {
   restoreGlobal(t, 'location', locationMock);
   restoreGlobal(t, 'navigator', navigatorMock);
   restoreGlobal(t, 'chrome', chromeMock);
+  const imageOperations = { closed: false };
+  restoreGlobal(t, 'createImageBitmap', async (blob) => {
+    assert.equal(blob.type, 'image/png');
+    assert.equal(await blob.text(), 'screenshot');
+    return { width: 2560, height: 1440, close() { imageOperations.closed = true; } };
+  });
+  restoreGlobal(t, 'OffscreenCanvas', class {
+    constructor(width, height) { imageOperations.dimensions = { width, height }; }
+    getContext(type, options) {
+      assert.equal(type, '2d');
+      assert.deepEqual(options, { alpha: false });
+      return { drawImage(...args) { imageOperations.drawArgs = args.slice(1); } };
+    }
+    async convertToBlob(options) {
+      imageOperations.encoding = options;
+      return new Blob(['screenshot'], { type: options.type });
+    }
+  });
+  restoreGlobal(t, 'FileReader', class {
+    readAsDataURL(blob) {
+      blob.arrayBuffer().then((bytes) => {
+        this.result = `data:${blob.type};base64,${Buffer.from(bytes).toString('base64')}`;
+        this.onload();
+      });
+    }
+  });
 
-  return { animationFrames, postedMessages, removedSelectors, sentMessages };
+  return { animationFrames, postedMessages, removedSelectors, sentMessages, imageOperations };
 };
 
 test('collectDomSnapshot removes extension chrome and captures bounded page context', (t) => {
@@ -155,7 +181,7 @@ test('captureScreenshot hides only the adapter panel while Chrome captures the v
 
   const screenshot = await pageDiagnostics.captureScreenshot({ host, isOverlayOpen: true });
 
-  assert.equal(screenshot, 'data:image/png;base64,c2NyZWVuc2hvdA==');
+  assert.equal(screenshot, 'data:image/jpeg;base64,c2NyZWVuc2hvdA==');
   assert.equal(host.style.visibility, 'visible');
   assert.equal(animationFrames.length, 2);
   assert.deepEqual(sentMessages, [{ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }]);
@@ -194,7 +220,7 @@ test('collectFullDiagnostics builds a privacy-preserving diagnostic bundle', asy
   });
 
   assert.equal(drawingInputDisabled, true);
-  assert.equal(result.screenshotDataUrl, 'data:image/png;base64,c2NyZWVuc2hvdA==');
+  assert.equal(result.screenshotDataUrl, 'data:image/jpeg;base64,c2NyZWVuc2hvdA==');
   assert.deepEqual(sentMessages, [{ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }]);
   assert.equal(host.style.visibility, '');
 
@@ -250,4 +276,60 @@ test('message helpers append labeled JSON payloads and strip screenshot data-url
     pageDiagnostics.createRecaptureMessage(diagnosticPayload),
     /^Manual full browser diagnostic recapture from the Chrome extension\.\n\n```json a2gent_browser_diagnostic/,
   );
+});
+
+test('screenshot dimensions remove retina scale, cap either long edge and handle browser zoom', () => {
+  const dimensions = pageDiagnostics.screenshotDimensions;
+  assert.equal(pageDiagnostics.SCREENSHOT_MAX_LONG_EDGE, 1280);
+  assert.deepEqual(dimensions(2000, 1200, 2), { width: 1000, height: 600 });
+  assert.deepEqual(dimensions(3272, 1858, 2), { width: 1280, height: 727 });
+  assert.deepEqual(dimensions(3826, 2462, 2), { width: 1280, height: 824 });
+  assert.deepEqual(dimensions(1800, 3200, 2), { width: 720, height: 1280 });
+  assert.deepEqual(dimensions(1920, 1080, 1.5), { width: 1280, height: 720 });
+  assert.deepEqual(dimensions(640, 480, 0.8), { width: 800, height: 600 });
+  for (const ratio of [0, -1, NaN, Infinity, undefined]) {
+    assert.deepEqual(dimensions(640, 480, ratio), { width: 640, height: 480 });
+  }
+  assert.deepEqual(dimensions(1, 3000, 2), { width: 1, height: 1280 });
+});
+
+test('captureScreenshot draws CSS-sized pixels and encodes JPEG at quality 0.8', async (t) => {
+  const { imageOperations } = installBrowserGlobals(t);
+  restoreGlobal(t, 'fetch', () => { throw new Error('Host CSP blocks fetch'); });
+  await pageDiagnostics.captureScreenshot({});
+  assert.deepEqual(imageOperations.dimensions, { width: 1280, height: 720 });
+  assert.deepEqual(imageOperations.drawArgs, [0, 0, 1280, 720]);
+  assert.deepEqual(imageOperations.encoding, { type: 'image/jpeg', quality: 0.8 });
+  assert.equal(imageOperations.closed, true);
+});
+
+test('captureScreenshot restores the panel and closes the bitmap on encoding failure', async (t) => {
+  const { imageOperations } = installBrowserGlobals(t);
+  restoreGlobal(t, 'OffscreenCanvas', class {
+    getContext() { return { drawImage() {} }; }
+    async convertToBlob() { throw new Error('Encoding failed'); }
+  });
+  const host = { style: { visibility: 'visible' } };
+  await assert.rejects(pageDiagnostics.captureScreenshot({ host, isOverlayOpen: true }), /Encoding failed/);
+  assert.equal(host.style.visibility, 'visible');
+  assert.equal(imageOperations.closed, true);
+});
+
+test('captureScreenshot restores the panel when Chrome capture fails', async (t) => {
+  installBrowserGlobals(t);
+  chrome.runtime.sendMessage = async () => ({ ok: false, error: 'Capture failed' });
+  const host = { style: { visibility: '' } };
+  await assert.rejects(pageDiagnostics.captureScreenshot({ host, isOverlayOpen: true }), /Capture failed/);
+  assert.equal(host.style.visibility, '');
+});
+
+test('imageFromScreenshot preserves the actual MIME type and matches the filename', () => {
+  for (const [type, extension] of [['jpeg', 'jpg'], ['webp', 'webp'], ['png', 'png']]) {
+    assert.deepEqual(pageDiagnostics.imageFromScreenshot(`data:image/${type};base64,aW1hZ2U=`, 'capture.png'), {
+      name: `capture.${extension}`,
+      media_type: `image/${type}`,
+      data_base64: 'aW1hZ2U=',
+    });
+  }
+  assert.throws(() => pageDiagnostics.imageFromScreenshot('not an image', 'capture.png'), /Invalid screenshot/);
 });
