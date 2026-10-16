@@ -1,6 +1,10 @@
+// HearHear (audio mode) is bundled by `npm run build`; it registers its own message listeners.
+if (typeof importScripts === 'function') importScripts('dist/hearhear-background.js');
+
 const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
 const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
 const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
+const STORAGE_MODE_KEY = 'a2gent.adapterChrome.mode';
 
 const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
 
@@ -324,8 +328,32 @@ chrome.storage.onChanged?.addListener((changes, areaName) => {
   if (areaName === 'local' && changes[STORAGE_BASE_URL_KEY]) controlSocket?.close();
 });
 
+// Audio (HearHear player, default) vs design (session overlay) mode, switched from the toolbar icon's context menu.
+const getMode = async () => ((await storageGet(STORAGE_MODE_KEY)) === 'design' ? 'design' : 'audio');
+
+chrome.runtime.onInstalled?.addListener(async () => {
+  if (!chrome.contextMenus) return;
+  const mode = await getMode();
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'audio', type: 'radio', title: 'Audio mode (HearHear)', contexts: ['action'], checked: mode === 'audio' });
+    chrome.contextMenus.create({ id: 'design', type: 'radio', title: 'Design mode (sessions)', contexts: ['action'], checked: mode === 'design' });
+  });
+});
+
+chrome.contextMenus?.onClicked.addListener((info) => {
+  if (info.menuItemId === 'audio' || info.menuItemId === 'design') {
+    chrome.storage.local.set({ [STORAGE_MODE_KEY]: info.menuItemId });
+  }
+});
+
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id || !tab.url || !/^(?:https?|file):\/\//i.test(tab.url)) {
+    return;
+  }
+
+  if (await getMode() === 'audio') {
+    // The icon shows/hides the HearHear player; pages without a detected article have none.
+    await chrome.tabs.sendMessage(tab.id, { target: 'content', action: 'toggleVisibility' }).catch(() => {});
     return;
   }
 

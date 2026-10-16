@@ -9,13 +9,14 @@ const manifest = require('../manifest.json');
 const exists = (relativePath) => fs.existsSync(path.join(repoRoot, relativePath));
 
 test('manifest content scripts support web pages and local files', () => {
-  for (const entry of manifest.content_scripts) {
+  // The HearHear bundle is http(s)-only: articles are not read from local files.
+  for (const entry of manifest.content_scripts.filter((item) => !item.js.includes('dist/hearhear-content.js'))) {
     assert.deepEqual(entry.matches, ['http://*/*', 'https://*/*', 'file:///*']);
   }
 });
 
 test('manifest content scripts reference bundled files in load order', () => {
-  const scriptFiles = manifest.content_scripts.flatMap((entry) => entry.js || []);
+  const scriptFiles = manifest.content_scripts.flatMap((entry) => entry.js || []).filter((file) => !file.startsWith('dist/'));
 
   assert.deepEqual(scriptFiles, [
     'src/pageHook.js',
@@ -59,4 +60,11 @@ test('manifest exposes the virtual cursor image to content-injected page DOM', (
     },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
+});
+
+test('manifest wires the HearHear audio bundle, offscreen document and options page', () => {
+  assert.ok(manifest.content_scripts.some((entry) => entry.js.includes('dist/hearhear-content.js')));
+  for (const permission of ['offscreen', 'contextMenus']) assert.ok(manifest.permissions.includes(permission));
+  assert.equal(manifest.options_page, 'hearhear/options.html');
+  assert.equal(exists('hearhear/offscreen.html'), true);
 });

@@ -434,6 +434,12 @@
     }
   };
 
+  // Switching to audio mode closes the session overlay so only the HearHear player remains.
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    const change = area === 'local' && changes['a2gent.adapterChrome.mode'];
+    if (change && change.newValue !== 'design' && state.open) setState({ open: false });
+  });
+
   chrome.runtime.onMessage.addListener((message) => {
     if (message && message.type === 'A2GENT_TOGGLE_OVERLAY') {
       void toggleOverlay();

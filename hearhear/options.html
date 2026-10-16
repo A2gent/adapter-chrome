@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>HearHear by Agent ²</title>
+<link rel="stylesheet" href="options.css">
+<main>
+  <h1>HearHear / Озвучивание статей</h1>
+  <p>Configure local Brute for HearHear. The toolbar button hides or shows the player; right-click it to switch Audio / Design mode.</p>
+  <form>
+    <label for="url">Local Brute URL / Локальный адрес Brute</label>
+    <input id="url" type="url" required placeholder="http://localhost:5445">
+    <label for="model">TTS model / Модель озвучки</label>
+    <select id="model"><option value="auto">Auto (best available) / Авто (лучший доступный)</option></select>
+    <button type="submit">Save / Сохранить</button>
+  </form>
+  <p role="status" id="status"></p>
+  <p class="hint">Text is sent only when you press Play. / Текст отправляется только после нажатия Play. It is not stored by the extension. / Расширение его не сохраняет. Older Brute versions work with Auto. / Старые версии Brute работают с Auto.</p>
+</main>
+<script type="module" src="../dist/hearhear-options.js"></script>
+</html>

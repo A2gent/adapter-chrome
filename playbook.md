@@ -20,3 +20,4 @@
 - File-edit tool paths resolve from the project root, unlike bash commands with a component workdir. Use project-relative paths (for example `adapter-chrome/...`) with file-edit tools.
 - If a short exact-string edit matches multiple test cases, anchor it with the enclosing test name or use a narrow line-range replacement to avoid changing unrelated harness tests.
 - Run `git diff --check` after edits; source-based tests do not catch trailing whitespace.
+- HearHear bundles live in git-ignored dist/: run `npm run build` before loading or running tests that import dist assets; the two browserControlBridge test failures predate the merge.

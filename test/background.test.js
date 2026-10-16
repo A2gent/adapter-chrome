@@ -262,7 +262,7 @@ test('background handles screenshot, default base URL, and session tab messages'
 });
 
 test('background allows toggling the overlay on local file pages', async () => {
-  const background = loadBackground();
+  const background = loadBackground({ storageValues: { 'a2gent.adapterChrome.mode': 'design' } });
 
   await background.onActionClick({ id: 123, url: 'file:///tmp/local-design.html' });
 
@@ -274,6 +274,7 @@ test('background allows toggling the overlay on local file pages', async () => {
 
 test('background injects content scripts when action toggle misses the tab', async () => {
   const background = loadBackground({
+    storageValues: { 'a2gent.adapterChrome.mode': 'design' },
     async sendMessage(tabId, message, callNumber) {
       assert.deepEqual(toPlain({ tabId, message }), { tabId: 123, message: { type: 'A2GENT_TOGGLE_OVERLAY' } });
       if (callNumber === 1) {
@@ -615,4 +616,16 @@ test('tab API failures are returned as command errors', async (t) => {
     assert.equal(result.ok, false);
     assert.ok(result.error.endsWith(error));
   }
+});
+
+test('background action click toggles the HearHear player in the default audio mode', async () => {
+  const background = loadBackground();
+
+  await background.onActionClick({ id: 123, url: 'https://example.test/article' });
+
+  assert.deepEqual(toPlain(background.calls.sendMessages), [{
+    tabId: 123,
+    message: { target: 'content', action: 'toggleVisibility' },
+  }]);
+  assert.equal(background.calls.executeScripts.length, 0);
 });
