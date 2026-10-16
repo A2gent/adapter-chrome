@@ -27,6 +27,7 @@ test('manifest uses bundled A2gent icon assets for extension and toolbar icons',
 
   assert.deepEqual(manifest.icons, expectedIcons);
   assert.deepEqual(manifest.action.default_icon, expectedIcons);
+  assert.ok(manifest.web_accessible_resources.flatMap(({ resources }) => resources).includes(expectedIcons[16]));
 
   for (const [size, relativePath] of Object.entries(expectedIcons)) {
     const iconPath = path.join(repoRoot, relativePath);

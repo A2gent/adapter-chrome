@@ -107,6 +107,14 @@
         "https://*/*",
         "file:///*"
       ]
+    },
+    {
+      "resources": [
+        "icons/a2gent-16.png"
+      ],
+      "matches": [
+        "https://www.linkedin.com/*"
+      ]
     }
   ],
   "options_page": "hearhear/options.html",

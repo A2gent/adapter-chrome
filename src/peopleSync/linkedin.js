@@ -107,6 +107,17 @@
     return row === anchor ? anchor.parentElement : row;
   };
 
+  // Place the people control in the same action group as LinkedIn's Message button.
+  const messageActionArea = (doc, slug) => {
+    const row = rowElement(doc, slug);
+    if (!row) return null;
+    const message = [...row.querySelectorAll('button,[role="button"],a[role="button"]')].find((button) => {
+      const labels = [button.getAttribute('aria-label'), button.getAttribute('title'), button.textContent].map(clean).join(' ').toLowerCase();
+      return /\bmessage\b/.test(labels);
+    });
+    return message?.parentElement || row;
+  };
+
   // Profile top card: the section holding the name heading.
   const profileHeader = (doc) => {
     const h1 = (doc.querySelector('main') || doc.body)?.querySelector('h1');
@@ -129,5 +140,5 @@
     return (people || []).find((person) => [person.name, ...(person.aliases || [])].some((value) => clean(value).toLowerCase() === target)) || null;
   };
 
-  return { profileSlug, canonicalUrl, pageKind, textLines, splitHeadline, parseProfile, parseList, rowElement, profileHeader, linkedPeople, suggestPerson };
+  return { profileSlug, canonicalUrl, pageKind, textLines, splitHeadline, parseProfile, parseList, rowElement, messageActionArea, profileHeader, linkedPeople, suggestPerson };
 });

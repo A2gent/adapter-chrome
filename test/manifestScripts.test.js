@@ -56,14 +56,19 @@ test('background fallback injection includes all isolated content helpers before
   );
 });
 
-test('manifest exposes the virtual cursor image to content-injected page DOM', () => {
+test('manifest exposes content-injected images to page DOM', () => {
   assert.deepEqual(manifest.web_accessible_resources, [
     {
       resources: ['cursor.png'],
       matches: ['http://*/*', 'https://*/*', 'file:///*'],
     },
+    {
+      resources: ['icons/a2gent-16.png'],
+      matches: ['https://www.linkedin.com/*'],
+    },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
+  assert.equal(exists('icons/a2gent-16.png'), true, 'the A2gent icon must be bundled with the extension');
 });
 
 test('manifest wires the HearHear audio bundle, offscreen document and options page', () => {

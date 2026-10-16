@@ -61,6 +61,14 @@ test('parseList collects unique profiles with headline and location', () => {
   ]);
 });
 
+test('messageActionArea targets the group containing LinkedIn Message', () => {
+  const page = doc(`<main><ul><li>
+    <div><a href="/in/anna-k/"><span>Anna K</span></a></div>
+    <div class="actions"><button aria-label="Message Anna K">Message</button><button>Connect</button></div>
+  </li></ul></main>`);
+  assert.equal(linkedin.messageActionArea(page, 'anna-k'), page.querySelector('.actions'));
+});
+
 test('linkedPeople and suggestPerson match cards by socials.linkedin and name/aliases', () => {
   const people = [
     { name: 'Anna Karenina', aliases: ['Anna K'], path: 'People/Anna.md', socials: { linkedin: 'https://linkedin.com/in/Anna-K' } },

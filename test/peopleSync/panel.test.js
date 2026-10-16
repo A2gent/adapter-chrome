@@ -21,6 +21,7 @@ test('sync mode panel creates a card for an unknown profile and syncs it', async
   };
   window.chrome = {
     runtime: {
+      getURL: (resource) => `chrome-extension://test/${resource}`,
       lastError: null,
       onMessage: { addListener() {} },
       sendMessage(message, reply) {
@@ -84,6 +85,7 @@ test('sync mode panel links an unknown profile to an existing person chosen in t
   };
   window.chrome = {
     runtime: {
+      getURL: (resource) => `chrome-extension://test/${resource}`,
       lastError: null,
       onMessage: { addListener() {} },
       sendMessage(message, reply) {
@@ -137,8 +139,8 @@ test('sync mode panel links an unknown profile to an existing person chosen in t
 
 test('sync mode injects one inline widget per list row and keeps the panel free of rows', async (t) => {
   const dom = new JSDOM(`<main><ul>
-    <li id="r1"><div><a href="/in/anna-k/"><span aria-hidden="true">Anna K</span></a><p>CTO at Acme</p></div><button>Message</button></li>
-    <li id="r2"><div><a href="/in/bob-b/"><span aria-hidden="true">Bob B</span></a><p>Dev at Beta</p></div><button>Message</button></li>
+    <li id="r1"><div><a href="/in/anna-k/"><span aria-hidden="true">Anna K</span></a><p>CTO at Acme</p></div><div class="actions"><button>Message</button></div></li>
+    <li id="r2"><div><a href="/in/bob-b/"><span aria-hidden="true">Bob B</span></a><p>Dev at Beta</p></div><div class="actions"><button>Message</button></div></li>
   </ul></main>`, { url: 'https://www.linkedin.com/mynetwork/invite-connect/connections/', runScripts: 'outside-only' });
   const { window } = dom;
   t.after(() => window.close());
@@ -148,6 +150,7 @@ test('sync mode injects one inline widget per list row and keeps the panel free 
   };
   window.chrome = {
     runtime: {
+      getURL: (resource) => `chrome-extension://test/${resource}`,
       lastError: null,
       onMessage: { addListener() {} },
       sendMessage(message, reply) {
@@ -174,8 +177,11 @@ test('sync mode injects one inline widget per list row and keeps the panel free 
   window.eval(source('peopleSync/panel.js'));
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  const widget = (rowId) => window.document.querySelector(`#${rowId} > [data-a2gent-people-sync]`);
+  const widget = (rowId) => window.document.querySelector(`#${rowId} .actions > [data-a2gent-people-sync]`);
   assert.ok(widget('r1') && widget('r2'));
+  assert.equal(window.document.querySelector('#r1 .actions > button').nextElementSibling, widget('r1'));
+  assert.match(roots.get(widget('r2')).querySelector('style').textContent, /width:136px;flex:0 0 136px/);
+  assert.equal(roots.get(widget('r2')).querySelector('img.brand-icon').getAttribute('src'), 'chrome-extension://test/icons/a2gent-16.png');
   assert.match(roots.get(widget('r1')).querySelector('.ok').textContent, /Anna K/);
   assert.equal(roots.get(widget('r2')).querySelector('button').textContent, '+');
   const panel = [...roots.entries()].find(([element]) => !element.hasAttribute('data-a2gent-people-sync'))[1];

@@ -8,9 +8,10 @@
 
   const MODE_KEY = 'a2gent.adapterChrome.mode';
   const PROJECT_KEY = 'a2gent.adapterChrome.peopleProject';
+  const ICON_URL = chrome.runtime.getURL('icons/a2gent-16.png');
   const STYLE = `:host{all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;font:13px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
 *{box-sizing:border-box;font-family:inherit}.box{width:340px;max-height:60vh;display:flex;flex-direction:column;background:#fff;border:1px solid #0001;border-radius:10px;box-shadow:0 8px 28px #0003}
-.head{display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid #0001}.logo{font-weight:700;color:#0a66c2}
+.head{display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid #0001}.brand-icon{display:block;width:18px;height:18px;flex:0 0 18px;object-fit:contain}
 select,input{font-size:inherit;font-family:inherit;min-width:0;padding:3px 5px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.head select{flex:1}
 .rows{overflow:auto}.row{display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid #0000000a}
 .who{flex:1;min-width:0}.who b,.who small{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.who small{color:#667}
@@ -19,13 +20,14 @@ button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color
 .err,.note{padding:5px 8px;color:#b42318}.note{color:#127a3a;overflow-wrap:anywhere;user-select:text;max-height:96px;overflow:auto}.err:empty,.note:empty{display:none}
 .sum{padding:5px 8px;color:#667}.sum:empty{display:none}
 .combo{flex:1;min-width:0;display:flex;flex-direction:column}.row .combo input{width:auto}.list{max-height:180px;overflow:auto;margin-top:2px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.list[hidden]{display:none}.grp{position:sticky;top:0;padding:2px 6px;font-size:11px;font-weight:600;color:#667;background:#f3f5f9}.opt{padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.opt:hover,.opt.on{background:#e3edfb}`;
-  // Widgets injected into LinkedIn rows/top card: same controls, without the panel chrome and name column.
-  const INLINE_STYLE = `:host{all:initial;display:block;flex-basis:100%;width:100%;margin:6px 0 2px;font:13px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
-*{box-sizing:border-box;font-family:inherit}.row{display:flex;gap:6px;align-items:center;max-width:520px}.logo{font-weight:700;color:#0a66c2}
-select,input{font-size:inherit;font-family:inherit;min-width:0;flex:1;padding:3px 5px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}
+  // Widgets injected next to LinkedIn's Message action; compact inputs keep the control action-sized.
+  const INLINE_STYLE = `:host{all:initial;display:inline-flex;vertical-align:middle;flex:0 0 auto;width:auto;max-width:100%;margin:0 0 0 6px;font:13px/1.35 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
+*{box-sizing:border-box;font-family:inherit}.row{display:flex;gap:5px;align-items:center;width:max-content;max-width:100%}.brand-icon{display:block;width:16px;height:16px;flex:0 0 16px;object-fit:contain}
+.combo{display:flex;flex-direction:column;width:136px;flex:0 0 136px;min-width:0}.row .combo input{width:136px;flex:none}
+select,input{font-size:inherit;font-family:inherit;min-width:0;padding:3px 5px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}
+.list{width:210px;max-height:180px;overflow:auto;margin-top:2px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.list[hidden]{display:none}.grp{position:sticky;top:0;padding:2px 6px;font-size:11px;font-weight:600;color:#667;background:#f3f5f9}.opt{padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.opt:hover,.opt.on{background:#e3edfb}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:inherit;font-family:inherit}
-button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color:#127a3a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.combo{flex:1;min-width:0;display:flex;flex-direction:column}.row .combo input{width:auto}.list{max-height:180px;overflow:auto;margin-top:2px;border:1px solid #c9d1dc;border-radius:5px;background:#fff}.list[hidden]{display:none}.grp{position:sticky;top:0;padding:2px 6px;font-size:11px;font-weight:600;color:#667;background:#f3f5f9}.opt{padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.opt:hover,.opt.on{background:#e3edfb}`;
+button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color:#127a3a;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}`;
   const INLINE_ATTR = 'data-a2gent-people-sync';
 
   let host; let shadow; let visible = true; let enabled = false;
@@ -127,11 +129,12 @@ button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color
     node.append(...children.filter((child) => child != null));
     return node;
   };
+  const brandIcon = () => el('img', { className: 'brand-icon', src: ICON_URL, alt: '', title: 'A2gent people sync' });
 
-  // embedded: the widget sits next to the LinkedIn name, so show the logo instead of repeating it.
+  // embedded: the widget sits beside LinkedIn actions, so use the product icon instead of a name column.
   const renderRow = (profile, linked, embedded = false) => {
     const person = linked.get(profile.slug);
-    const who = embedded ? el('span', { className: 'logo', textContent: 'in→', title: 'A2gent people sync' })
+    const who = embedded ? brandIcon()
       : el('div', { className: 'who', title: profile.url }, el('b', { textContent: profile.name }), el('small', { textContent: profile.headline }));
     if (person) {
       // List rows carry only name/headline; refreshing from them would wipe the richer profile-page sync.
@@ -228,7 +231,7 @@ button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color
     inline.clear();
   };
 
-  const inlineTarget = (profile) => (kind === 'profile' ? linkedin.profileHeader(document) : linkedin.rowElement(document, profile.slug));
+  const inlineTarget = (profile) => (kind === 'profile' ? linkedin.profileHeader(document) : linkedin.messageActionArea(document, profile.slug));
 
   // Injects/updates one widget per profile. Rebuilds a widget only when its state changes, so typing is
   // kept. Returns profiles with no place in the page; those stay in the floating panel.
@@ -292,7 +295,7 @@ button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}.ok{color
     const rows = el('div', { className: 'rows' }, ...unplaced.map((profile) => renderRow(profile, linked)));
     const linkedCount = profiles.filter((profile) => linked.has(profile.slug)).length;
     const summary = profiles.length ? `${linkedCount}/${profiles.length} linked · forms are inline on the page` : '';
-    const head = el('div', { className: 'head' }, el('span', { className: 'logo', textContent: 'in→' }), select,
+    const head = el('div', { className: 'head' }, brandIcon(), select,
       el('button', { textContent: '⟳', title: 'Reload people', onclick: () => loadProjects() }),
       el('button', { textContent: '×', title: 'Hide (toolbar icon shows it again)', onclick: () => { visible = false; render(); } }));
     shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' }, head, el('div', { className: 'err', textContent: error }), el('div', { className: 'note', textContent: notice }), el('div', { className: 'sum', textContent: unplaced.length < profiles.length ? summary : '' }), rows));
