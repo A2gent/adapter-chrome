@@ -384,6 +384,40 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
+const CAPTURE_PERMISSION_HELP = 'Screenshot permission denied. Chrome grants activeTab only after the user clicks the A2gent extension icon on the target tab; remote agent clicks do not count. Click the extension icon on this tab, then retry.';
+
+// WHY: captureVisibleTab always captures the ACTIVE tab of a window, which may not be the
+// tab that asked, and its raw "activeTab"/"all_urls" errors are not actionable.
+// WHAT: refuse unless the sender is the active tab, and map permission errors to guidance.
+const captureSenderTab = async (sender) => {
+  const senderTab = sender?.tab;
+  if (!Number.isInteger(senderTab?.id) || !Number.isInteger(senderTab?.windowId)) {
+    return { ok: false, error: 'Screenshot requires a sender tab.' };
+  }
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, windowId: senderTab.windowId });
+    if (activeTab?.id !== senderTab.id) {
+      return { ok: false, code: 'tab_not_active', error: 'Screenshot refused: the requesting tab is not the active tab in its window, so capturing would show a different page. Activate this tab and retry.' };
+    }
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+  return new Promise((resolve) => {
+    chrome.tabs.captureVisibleTab(senderTab.windowId, { format: 'png' }, (dataUrl) => {
+      const lastError = chrome.runtime.lastError;
+      if (lastError) {
+        const raw = lastError.message || 'Failed to capture visible tab.';
+        const denied = /activeTab|all_urls|permission/i.test(raw);
+        resolve(denied
+          ? { ok: false, code: 'permission_denied', error: CAPTURE_PERMISSION_HELP, detail: raw }
+          : { ok: false, error: raw });
+        return;
+      }
+      resolve({ ok: true, dataUrl });
+    });
+  });
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== 'object') {
     return false;
@@ -416,13 +450,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'A2GENT_CAPTURE_VISIBLE_TAB') {
-    chrome.tabs.captureVisibleTab(sender.tab?.windowId, { format: 'png' }, (dataUrl) => {
-      if (chrome.runtime.lastError) {
-        sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-        return;
-      }
-      sendResponse({ ok: true, dataUrl });
-    });
+    void captureSenderTab(sender).then(sendResponse);
     return true;
   }
 

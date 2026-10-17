@@ -63,6 +63,27 @@ After updating, reload the extension in `chrome://extensions`, refresh a source
 page to reconnect its content script, and restart/update Brute so the new tool
 schema is available. A running session may need to refresh its tool definitions.
 
+## Browser screenshots and `activeTab`
+
+Screenshots use `chrome.tabs.captureVisibleTab`, authorised by the `activeTab`
+permission. The manifest deliberately has no `<all_urls>` host permission.
+
+- `activeTab` is granted only after a **real user invocation** of the extension
+  (toolbar icon click or popup) on that tab. Remote agent clicks, `eval`, or
+  synthetic events never grant it.
+- The grant lasts for that tab until it navigates to another origin or closes;
+  reloading the extension also drops it.
+- `captureVisibleTab` captures the active tab of the window, so the service
+  worker refuses (`code: tab_not_active`) unless the requesting tab is that tab.
+- Without a grant the response has `code: permission_denied` and tells the
+  user to click the extension icon on the target tab and retry.
+
+Workflow: `list_pages`, make sure the target tab is active and click the
+extension icon on it once, then request the screenshot. For persistent
+unattended capture the maintainer would need to approve
+`optional_host_permissions: ["<all_urls>"]` plus a user-triggered permission
+request UI; this has not been added.
+
 ## Host page event isolation
 
 The overlay is injected into the current page, but keyboard input inside the overlay is isolated from the host page. When focus is in the adapter UI, key events are stopped in both the extension's isolated content-script world and the page's main world before page-level shortcut handlers can consume them, so sites such as YouTube should not toggle playback or navigate while the user types in the extension overlay. Composer textareas use chat-style keyboard behavior: `Enter` submits the current prompt/follow-up, while `Shift+Enter` inserts a newline. The overlay also preserves textarea/input focus and selection across internal re-renders, preventing focus from falling back to the host page while projects load or session status updates.

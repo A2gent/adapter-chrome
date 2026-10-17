@@ -75,6 +75,10 @@ const loadBackground = (overrides = {}) => {
         }
         return undefined;
       },
+      async query(queryInfo) {
+        if (overrides.queryTabs) return overrides.queryTabs(queryInfo);
+        return [{ id: 5, windowId: queryInfo.windowId, active: true }];
+      },
       captureVisibleTab(windowId, options, callback) {
         calls.capturedTabs.push({ windowId, options });
         if (overrides.captureVisibleTab) {
@@ -233,7 +237,7 @@ test('background handles screenshot, default base URL, and session tab messages'
   const background = loadBackground();
 
   const screenshot = await new Promise((resolve) => {
-    assert.equal(background.onMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }, { tab: { windowId: 7 } }, resolve), true);
+    assert.equal(background.onMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }, { tab: { id: 5, windowId: 7 } }, resolve), true);
   });
   assert.deepEqual(toPlain(screenshot), { ok: true, dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdA==' });
   assert.deepEqual(toPlain(background.calls.capturedTabs), [{ windowId: 7, options: { format: 'png' } }]);
@@ -254,6 +258,35 @@ test('background handles screenshot, default base URL, and session tab messages'
   });
   assert.deepEqual(toPlain(openedSession), { ok: true });
   assert.deepEqual(toPlain(background.calls.createdTabs), [{ url: 'https://my.a2gent.net/chat/session%2Fwith%20spaces' }]);
+});
+
+test('screenshot capture explains denied activeTab permission', async () => {
+  const background = loadBackground({
+    captureVisibleTab(windowId, options, callback, runtime) {
+      runtime.lastError = { message: "Either the '<all_urls>' or 'activeTab' permission is required." };
+      callback();
+      runtime.lastError = null;
+    },
+  });
+  const response = await new Promise((resolve) => {
+    background.onMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }, { tab: { id: 5, windowId: 7 } }, resolve);
+  });
+  assert.equal(response.ok, false);
+  assert.equal(response.code, 'permission_denied');
+  assert.match(response.error, /click the extension icon on this tab, then retry/i);
+  assert.match(response.detail, /activeTab/);
+});
+
+test('screenshot capture refuses when the sender is not the active tab', async () => {
+  const background = loadBackground({
+    queryTabs: async () => [{ id: 99, windowId: 7, active: true }],
+  });
+  const response = await new Promise((resolve) => {
+    background.onMessage({ type: 'A2GENT_CAPTURE_VISIBLE_TAB' }, { tab: { id: 5, windowId: 7 } }, resolve);
+  });
+  assert.equal(response.ok, false);
+  assert.equal(response.code, 'tab_not_active');
+  assert.equal(background.calls.capturedTabs.length, 0);
 });
 
 test('background allows toggling the overlay on local file pages', async () => {
