@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), or sync LinkedIn profiles into Brute person cards (sync mode).",
   "action": {
-    "default_title": "A2gent: toggle overlay / HearHear player (right-click to switch mode)",
+    "default_title": "A2gent: pick a mode",
+    "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/a2gent-16.png",
       "32": "icons/a2gent-32.png",
@@ -22,8 +23,7 @@
     "activeTab",
     "scripting",
     "storage",
-    "offscreen",
-    "contextMenus"
+    "offscreen"
   ],
   "host_permissions": [
     "http://localhost/*",

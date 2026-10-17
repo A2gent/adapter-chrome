@@ -16,7 +16,6 @@ const toPlain = (value) => JSON.parse(JSON.stringify(value));
 // WHAT: run it in a fresh VM with a small Chrome API mock, then drive the registered listeners.
 const loadBackground = (overrides = {}) => {
   const listeners = {
-    actionClicks: [],
     runtimeMessages: [],
     runtimeConnects: [],
   };
@@ -46,13 +45,6 @@ const loadBackground = (overrides = {}) => {
   };
 
   const chrome = {
-    action: {
-      onClicked: {
-        addListener(listener) {
-          listeners.actionClicks.push(listener);
-        },
-      },
-    },
     runtime,
     scripting: {
       async executeScript(details) {
@@ -151,7 +143,10 @@ const loadBackground = (overrides = {}) => {
     storageValues,
     onMessage: listeners.runtimeMessages[0],
     onConnect: listeners.runtimeConnects[0],
-    onActionClick: listeners.actionClicks[0],
+    // Mirrors the toolbar popup picking a mode for the active tab.
+    activateMode: (mode, tab) => new Promise((resolve) => {
+      listeners.runtimeMessages[0]({ type: 'A2GENT_ACTIVATE_MODE', mode, tab }, {}, resolve);
+    }),
   };
 };
 
@@ -262,9 +257,10 @@ test('background handles screenshot, default base URL, and session tab messages'
 });
 
 test('background allows toggling the overlay on local file pages', async () => {
-  const background = loadBackground({ storageValues: { 'a2gent.adapterChrome.mode': 'design' } });
+  const background = loadBackground();
 
-  await background.onActionClick({ id: 123, url: 'file:///tmp/local-design.html' });
+  await background.activateMode('design', { id: 123, url: 'file:///tmp/local-design.html' });
+  assert.equal(background.storageValues['a2gent.adapterChrome.mode'], 'design');
 
   assert.deepEqual(toPlain(background.calls.sendMessages), [{
     tabId: 123,
@@ -274,7 +270,6 @@ test('background allows toggling the overlay on local file pages', async () => {
 
 test('background injects content scripts when action toggle misses the tab', async () => {
   const background = loadBackground({
-    storageValues: { 'a2gent.adapterChrome.mode': 'design' },
     async sendMessage(tabId, message, callNumber) {
       assert.deepEqual(toPlain({ tabId, message }), { tabId: 123, message: { type: 'A2GENT_TOGGLE_OVERLAY' } });
       if (callNumber === 1) {
@@ -284,7 +279,7 @@ test('background injects content scripts when action toggle misses the tab', asy
     },
   });
 
-  await background.onActionClick({ id: 123, url: 'https://example.test/app' });
+  assert.deepEqual(toPlain(await background.activateMode('design', { id: 123, url: 'https://example.test/app' })), { ok: true });
 
   assert.equal(background.calls.sendMessages.length, 2);
   assert.equal(background.calls.executeScripts.length, 2);
@@ -618,10 +613,10 @@ test('tab API failures are returned as command errors', async (t) => {
   }
 });
 
-test('background action click toggles the HearHear player in the default audio mode', async () => {
+test('popup audio mode toggles the HearHear player', async () => {
   const background = loadBackground();
 
-  await background.onActionClick({ id: 123, url: 'https://example.test/article' });
+  await background.activateMode('audio', { id: 123, url: 'https://example.test/article' });
 
   assert.deepEqual(toPlain(background.calls.sendMessages), [{
     tabId: 123,
@@ -630,10 +625,15 @@ test('background action click toggles the HearHear player in the default audio m
   assert.equal(background.calls.executeScripts.length, 0);
 });
 
-test('background action click toggles the people sync panel in sync mode', async () => {
-  const background = loadBackground({ storageValues: { 'a2gent.adapterChrome.mode': 'sync' } });
+test('popup sync mode toggles the people sync panel', async () => {
+  const background = loadBackground({ storageValues: { 'a2gent.adapterChrome.mode': 'audio' } });
 
-  await background.onActionClick({ id: 123, url: 'https://www.linkedin.com/in/anna/' });
+  await background.activateMode('sync', { id: 123, url: 'https://www.linkedin.com/in/anna/' });
+  assert.equal(background.storageValues['a2gent.adapterChrome.mode'], 'sync');
+  // Switching modes: the panel shows itself from the storage change, so it is not toggled.
+  assert.deepEqual(toPlain(background.calls.sendMessages), []);
+
+  await background.activateMode('sync', { id: 123, url: 'https://www.linkedin.com/in/anna/' });
 
   assert.deepEqual(toPlain(background.calls.sendMessages), [{
     tabId: 123,

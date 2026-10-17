@@ -73,7 +73,7 @@ test('manifest exposes content-injected images to page DOM', () => {
 
 test('manifest wires the HearHear audio bundle, offscreen document and options page', () => {
   assert.ok(manifest.content_scripts.some((entry) => entry.js.includes('dist/hearhear-content.js')));
-  for (const permission of ['offscreen', 'contextMenus']) assert.ok(manifest.permissions.includes(permission));
+  for (const permission of ['offscreen']) assert.ok(manifest.permissions.includes(permission));
   assert.equal(manifest.options_page, 'hearhear/options.html');
   assert.equal(exists('hearhear/offscreen.html'), true);
 });
