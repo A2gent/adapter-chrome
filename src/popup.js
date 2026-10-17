@@ -11,11 +11,16 @@ chrome.storage.local.get([MODE_KEY], (saved) => {
 document.querySelectorAll('[data-mode]').forEach((button) => {
   button.addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    await chrome.runtime.sendMessage({
+    const result = await chrome.runtime.sendMessage({
       type: 'A2GENT_ACTIVATE_MODE',
       mode: button.dataset.mode,
       tab: tab ? { id: tab.id, url: tab.url } : null,
-    });
+    }).catch((error) => ({ ok: false, error: String(error?.message || error) }));
+    // Keep the popup open on failure so the reason is visible instead of silently doing nothing.
+    if (result && result.ok === false) {
+      document.getElementById('error').textContent = result.error || 'Failed';
+      return;
+    }
     window.close();
   });
 });

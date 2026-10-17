@@ -119,6 +119,6 @@
   ],
   "options_page": "hearhear/options.html",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; media-src 'self' blob:; connect-src http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:* https://[::1]:*"
+    "extension_pages": "script-src 'self'; object-src 'none'; media-src 'self' blob:; connect-src http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*"
   }
 }
