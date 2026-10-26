@@ -21,3 +21,5 @@
 - If a short exact-string edit matches multiple test cases, anchor it with the enclosing test name or use a narrow line-range replacement to avoid changing unrelated harness tests.
 - Run `git diff --check` after edits; source-based tests do not catch trailing whitespace.
 - HearHear bundles live in git-ignored dist/: run `npm run build` before loading or running tests that import dist assets; the two browserControlBridge test failures predate the merge.
+- MV3 `importScripts()` paths resolve relative to the service worker file (`src/`), not the extension root: use `../dist/...`, else Chrome fails with "Service worker registration failed. Status code: 15".
+- Extension CSP `connect-src` needs explicit `ws://`/`wss://` hosts for the Brute WebSocket (`http://localhost:*` does not cover it); `[::1]` sources are invalid in CSP and only produce warnings.
