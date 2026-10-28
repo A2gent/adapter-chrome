@@ -23,7 +23,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "offscreen"
+    "offscreen",
+    "debugger"
   ],
   "host_permissions": [
     "http://localhost/*",

@@ -536,6 +536,40 @@
     window.postMessage({ type: 'A2GENT_PAGE_EVAL', requestId, script: String(script || '') }, '*');
   });
 
+  // WHY: pageHook.js evaluates with (0, eval) in the MAIN world, which a page CSP without
+  // 'unsafe-eval' blocks (x.com, LinkedIn). Verified 2026-10-28 that injecting a function
+  // into the ISOLATED world does not help either: that world carries the extension's own CSP,
+  // which also lacks 'unsafe-eval'. The only path left is the DevTools Protocol, driven from
+  // the service worker.
+  // WHAT: detect that specific failure and retry the same script through the CDP bridge.
+  const isCspEvalBlock = (error) => {
+    const text = String(error?.message || error || '');
+    return /unsafe-eval|Content Security Policy/i.test(text);
+  };
+
+  const evaluateViaCdp = async (script, timeoutMs = 15000) => {
+    const response = await chrome.runtime.sendMessage({
+      type: 'A2GENT_PAGE_EVAL_VIA_CDP',
+      script: String(script || ''),
+      timeout_ms: Math.max(1000, Math.min(Number(timeoutMs) || 15000, 60000)),
+    });
+    if (!response?.ok) {
+      throw new Error(response?.error || 'CDP page evaluation failed.');
+    }
+    return response.value;
+  };
+
+  const evaluateScript = async (script, timeoutMs) => {
+    try {
+      return await evaluateInMainWorld(script, timeoutMs);
+    } catch (error) {
+      // WHY: only CSP failures are retried. A genuine script error must surface as-is,
+      // otherwise the same broken expression would be reported twice with a confusing message.
+      if (!isCspEvalBlock(error)) throw error;
+      return evaluateViaCdp(script, timeoutMs);
+    }
+  };
+
   const getPageDiagnosticsFromMainWorld = (detailLevel = 'compact') => new Promise((resolve) => {
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const timeout = window.setTimeout(() => {
@@ -590,7 +624,7 @@
     const params = command?.params || {};
     switch (command?.action) {
       case 'eval':
-        return { value: await evaluateInMainWorld(params.script, command.timeout_ms) };
+        return { value: await evaluateScript(params.script, command.timeout_ms) };
       case 'get_text':
         return { text: clip(document.body?.innerText || document.documentElement?.textContent || '', MAX_TEXT), page: pageSnapshot() };
       case 'read_content':

@@ -95,6 +95,82 @@ const fetchBruteJson = async (request) => {
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
+// WHY: pages such as x.com ship a CSP without 'unsafe-eval', so the in-page eval used by
+// pageHook.js throws EvalError. Injecting a function through chrome.scripting does not help:
+// verified 2026-10-28 that the ISOLATED world has its own CSP (the extension's), which also
+// lacks 'unsafe-eval' - `new Function` and eval both still throw there.
+// WHAT: evaluate through the DevTools Protocol instead. Runtime.evaluate runs in the page's
+// own V8 context but is issued by the browser rather than by the page, so page CSP does not
+// apply to it.
+const DEBUGGER_ATTACH_VERSION = '1.3';
+const DEBUGGER_EVAL_TIMEOUT_MS = 15000;
+
+// Tabs this extension currently holds a debugger session on. Commands are serialized per tab,
+// because a second chrome.debugger.attach fails with
+// "Another debugger is already attached to the tab with id: N".
+const debuggerSessions = new Map(); // tabId -> Promise resolved once attached
+
+const attachDebugger = (tabId) => {
+  const existing = debuggerSessions.get(tabId);
+  if (existing) return existing;
+
+  const attaching = chrome.debugger
+    .attach({ tabId }, DEBUGGER_ATTACH_VERSION)
+    .then(() => tabId)
+    .catch((error) => {
+      debuggerSessions.delete(tabId);
+      throw error;
+    });
+  debuggerSessions.set(tabId, attaching);
+  return attaching;
+};
+
+const detachDebugger = async (tabId) => {
+  if (!debuggerSessions.delete(tabId)) return;
+  try {
+    await chrome.debugger.detach({ tabId });
+  } catch {
+    // Already gone (tab closed, user cancelled the debug session) - nothing to release.
+  }
+};
+
+// WHY: Chrome drops the session on tab close or on a cross-renderer navigation, and the
+// user can cancel it from the infobar; keeping a stale entry would make every later eval
+// wait on a dead session.
+if (chrome.debugger?.onDetach) {
+  chrome.debugger.onDetach.addListener((source) => {
+    const tabId = source?.tabId;
+    if (Number.isInteger(tabId)) debuggerSessions.delete(tabId);
+  });
+}
+
+// Runs one expression in the tab's main world, bypassing page CSP.
+// The expression may return a promise; awaitPromise resolves it before serializing.
+const evaluateWithDebugger = async (tabId, expression, timeoutMs = DEBUGGER_EVAL_TIMEOUT_MS) => {
+  if (!Number.isInteger(tabId)) throw new Error('CDP evaluation requires a tab id.');
+  await attachDebugger(tabId);
+
+  const evaluate = chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+    expression: String(expression || ''),
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Page evaluation timed out after ${timeoutMs}ms.`)), timeoutMs);
+  });
+
+  const response = await Promise.race([evaluate, timeout]);
+  if (!response) throw new Error('Page evaluation returned no result.');
+
+  // WHY: CSP violations and thrown errors arrive as exceptionDetails, not as a rejected
+  // promise, so a missing check would silently return null for every failure.
+  if (response.exceptionDetails) {
+    const detail = response.exceptionDetails;
+    throw new Error(detail.exception?.description || detail.text || 'Page evaluation failed.');
+  }
+  return response.result?.value ?? null;
+};
+
 const errorDetailFromApiResponse = (response) => {
   const body = response?.body;
   return body?.error || body?.message || response?.bodyText || `${response?.status || ''} ${response?.statusText || ''}`.trim() || 'Brute request failed.';
@@ -445,6 +521,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // WHAT: proxy JSON Brute API calls through the extension service worker.
     void fetchBruteJson(message)
       .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+    return true;
+  }
+
+  if (message.type === 'A2GENT_PAGE_EVAL_VIA_CDP') {
+    // WHY: fallback for pages whose CSP forbids eval (x.com, LinkedIn). The content script
+    // cannot work around it itself, and the service worker is the only place allowed to
+    // drive chrome.debugger.
+    // WHAT: evaluate the given expression in the sender's tab and answer with the raw value.
+    const tabId = sender?.tab?.id;
+    if (!Number.isInteger(tabId)) {
+      sendResponse({ ok: false, error: 'CDP evaluation requires a sender tab.' });
+      return false;
+    }
+    void evaluateWithDebugger(tabId, message.script, message.timeout_ms)
+      .then((value) => sendResponse({ ok: true, value }))
       .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
     return true;
   }
