@@ -452,6 +452,21 @@
     textarea?.setSelectionRange(String(textarea.value || '').length, String(textarea.value || '').length);
   };
 
+  // WHY: pages that set CSS zoom on <html> (Caesar desktop UI scaling) render this fixed host zoomed,
+  // while pointer coordinates stay in client space, so annotations drew offset from the cursor.
+  // WHAT: measure how many client px a 100px box occupies and counter-zoom the host to 1:1.
+  // Measured, not read from computed zoom, because browsers differ on what zoom does to client coords.
+  const syncHostZoom = () => {
+    if (!host) return;
+    host.style.zoom = '1';
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;left:0;top:0;width:100px;height:1px;visibility:hidden;pointer-events:none';
+    host.appendChild(probe);
+    const ratio = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    if (ratio > 0 && Math.abs(ratio - 1) > 0.001) host.style.zoom = String(1 / ratio);
+  };
+
   const applyVisibility = () => {
     if (!host) return;
     const visible = enabled || annotations.length > 0 || Boolean(drag);
@@ -480,6 +495,7 @@
       host.style.display = visible ? 'block' : 'none';
       host.style.pointerEvents = visible ? 'auto' : 'none';
     }
+    if (visible) syncHostZoom();
     if (surface) surface.style.pointerEvents = enabled ? 'auto' : 'none';
     if (surface) surface.classList.toggle('is-element-tool', enabled && activeTool === 'element');
   };
