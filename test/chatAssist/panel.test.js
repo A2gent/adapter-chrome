@@ -48,7 +48,6 @@ const completed = (...contents) => () => ({
 
 test('analyze starts an agent session that stays out of Telegram and shows the reply', async (t) => {
   const { calls, find, buttons, document } = setup(t, {
-    'GET /unified-agents/': () => ({ agents: [{ id: 'dev-coder', name: 'Coder' }, { id: 'biz-aristotle', name: 'Аристотель' }] }),
     'POST /sessions': () => ({ id: 's1' }),
     'POST /sessions/s1/start': () => ({}),
     'GET /sessions/s1': completed('Суть спора: релиз'),
@@ -56,8 +55,8 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   await settle();
 
   assert.equal(document.getElementById('composer').firstElementChild.hasAttribute('data-a2gent-chat-assist'), true);
-  assert.equal(find('select').value, 'biz-aristotle');
-  assert.equal(find('.box .bar .logo').src, 'chrome-extension://a2gent/icons/a2gent-32.png');
+  assert.equal(find('select'), null);
+  assert.equal(find('.box .bar .avatar').src, 'chrome-extension://a2gent/icons/aristotle-40.png');
   buttons()[0].click();
   await settle();
 

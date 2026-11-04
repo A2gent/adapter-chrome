@@ -8,8 +8,7 @@
   if (!googleChat || !renderMarkdown || !chatImage || globalThis.__A2GENT_CHAT_ASSIST_PANEL__) return;
   globalThis.__A2GENT_CHAT_ASSIST_PANEL__ = true;
 
-  const AGENT_KEY = 'a2gent.adapterChrome.chatAgent';
-  const DEFAULT_AGENT = { id: 'biz-aristotle', name: 'Аристотель' };
+  const AGENT = { id: 'biz-aristotle', name: 'Аристотель' };
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const POLL_MS = 2000;
   const REPLY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -17,12 +16,11 @@
   const WAITING_FOR_USER = ['input_required', 'paused', 'waiting_external'];
   const CONVERSATION_KEY_LENGTH = 200;
   const HOST_ATTR = 'data-a2gent-chat-assist';
-  const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
+  const AVATAR_URL = chrome.runtime.getURL('icons/aristotle-40.png');
   const STYLE = `:host{all:initial;display:block;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
-*{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.logo{flex:none;width:16px;height:16px;border-radius:3px;font-size:9px}
-select{font-size:12px;max-width:150px;padding:2px 4px;border:1px solid #c9d1dc;border-radius:5px;background:#fff;color:inherit}
+*{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.avatar{flex:none;width:20px;height:20px;margin-left:auto;border-radius:50%}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
-a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar span{font-size:12px}.out{margin:2px 6px 6px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
+a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6px 6px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
 .out.err{color:#b42318}.out:empty{display:none}
 .md{white-space:normal;overflow-wrap:break-word}.md a:hover{text-decoration:underline}
 .md p,.md ul,.md ol,.md pre,.md blockquote,.md table{margin:0 0 6px}.md>:last-child{margin-bottom:0}.md>:first-child{margin-top:0}
@@ -34,8 +32,6 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
 .md table{border-collapse:collapse}.md th,.md td{padding:3px 6px;border:1px solid #c9d1dc;vertical-align:top}.md th{background:#eef1f6;font-weight:600;text-align:left}`;
 
   const widgets = new Map();
-  let agents = [DEFAULT_AGENT];
-  let agentId = DEFAULT_AGENT.id;
   let scanTimer;
 
   const api = async (path, options = {}) => {
@@ -49,10 +45,9 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
   const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
   const startSession = async (task, images) => {
-    const agent = agents.find((candidate) => candidate.id === agentId) || DEFAULT_AGENT;
     const session = await post('/sessions', {
       agent_id: 'build',
-      unified_agent_id: agent.id,
+      unified_agent_id: AGENT.id,
       queued: true,
       queue_mode: 'serial',
       task,
@@ -60,8 +55,8 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
       metadata: {
         source: 'google_chat',
         launch_target: 'agent',
-        launch_agent_id: agent.id,
-        launch_agent_name: agent.name,
+        launch_agent_id: AGENT.id,
+        launch_agent_name: AGENT.name,
         // Work conversations must stay local instead of being mirrored into a Telegram topic.
         skip_telegram_sync: true,
       },
@@ -104,19 +99,15 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
 
   const render = (widget) => {
     const { busy, error, reply, sessionId, imageStatus, imageError } = widget;
-    const select = el('select', { title: 'Agent', disabled: busy, onchange: () => {
-      agentId = select.value;
-      chrome.storage.local.set({ [AGENT_KEY]: agentId });
-      for (const other of widgets.values()) render(other);
-    } }, ...agents.map((agent) => el('option', { value: agent.id, textContent: agent.name, selected: agent.id === agentId })));
     const button = (textContent, title, onclick) => el('button', { textContent, title, disabled: busy, onclick });
-    const bar = el('div', { className: 'bar' }, el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent', title: 'A2gent' }), select,
+    const bar = el('div', { className: 'bar' },
       button('🔎', 'Analyze this conversation', () => analyze(widget)),
       button('📝', 'Review the draft typed in the reply box', () => reviewDraft(widget)),
       busy ? el('span', { textContent: '…' }) : null,
       imageStatus ? el('span', { textContent: imageStatus, title: imageError || 'Images sent to the agent' }) : null,
       reply || error ? button('×', 'Hide the result', () => { widget.reply = ''; widget.error = ''; render(widget); }) : null,
-      sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null);
+      sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null,
+      el('img', { className: 'avatar', src: AVATAR_URL, alt: AGENT.name, title: AGENT.name }));
     widget.shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' }, bar,
       error ? el('div', { className: 'out err', textContent: error }) : el('div', { className: 'out md' }, renderMarkdown(reply))));
   };
@@ -132,8 +123,8 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
       const sources = googleChat.selectImages(messages);
       const transcript = googleChat.transcriptText(messages, sources);
       if (!transcript) throw new Error('No messages found in this conversation.');
-      // Chat can reuse one composer for another conversation; a session must not mix conversations or agents.
-      const key = `${agentId}|${transcript.slice(0, CONVERSATION_KEY_LENGTH)}`;
+      // Chat can reuse one composer for another conversation; a session must not mix conversations.
+      const key = transcript.slice(0, CONVERSATION_KEY_LENGTH);
       if (widget.key !== key) Object.assign(widget, { key, sessionId: '', transcript: '', sources: [] });
       // Brute only delivers queued messages to completed sessions; anything else needs a fresh session.
       const session = widget.sessionId ? await api(`/sessions/${encodeURIComponent(widget.sessionId)}`) : null;
@@ -205,20 +196,6 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
     }
   };
 
-  const loadAgents = async () => {
-    const saved = (await chrome.storage.local.get(AGENT_KEY))[AGENT_KEY];
-    try {
-      const body = await api('/unified-agents/');
-      const list = (Array.isArray(body?.agents) ? body.agents : []).filter((agent) => agent.id && agent.name);
-      if (list.length) agents = list;
-    } catch {
-      // Brute may be down right now; the first click reports it with a real error.
-    }
-    agentId = [saved, DEFAULT_AGENT.id].find((id) => agents.some((agent) => agent.id === id)) || agents[0].id;
-    for (const widget of widgets.values()) render(widget);
-  };
-
-  loadAgents();
   scan();
   // Chat is a SPA that rebuilds panes while navigating, so composers come and go.
   new MutationObserver(() => {
