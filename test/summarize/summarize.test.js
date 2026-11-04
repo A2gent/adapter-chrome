@@ -76,7 +76,7 @@ test('the panel opens with a loading state, then renders the summary and the ses
   const { calls, summarize, shadow, document } = setupPanel(t, happy('**Short** summary'));
   summarize('A long article text');
   assert.equal(document.querySelectorAll('[data-a2gent-summarize]').length, 1);
-  assert.equal(shadow().querySelector('.out').textContent, 'Summarizing…');
+  assert.ok(shadow().querySelector('.out .spinner'));
   await settle();
 
   const created = calls.find((call) => call.key === 'POST /sessions').body;

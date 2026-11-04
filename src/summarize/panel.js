@@ -16,7 +16,9 @@
 .panel{position:fixed;top:0;right:0;bottom:0;width:min(380px,100vw);z-index:2147483647;display:flex;flex-direction:column;background:#fff;color:#1c2333;border-left:1px solid #c9d1dc;box-shadow:-4px 0 16px #0002;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
 .bar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e3e8ef}.logo{width:16px;height:16px;border-radius:3px}.title{flex:1;font-weight:600}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:15px;color:inherit}button:hover{background:#dfe5ee}
-.out{flex:1;overflow:auto;padding:10px;overflow-wrap:anywhere;user-select:text}.out.err{color:#b42318}.out.busy{color:#525c6b}
+.out{flex:1;overflow:auto;padding:10px;overflow-wrap:anywhere;user-select:text}.out.err{color:#b42318}.out.busy{display:flex;align-items:center;justify-content:center;color:#525c6b}
+.spinner{width:22px;height:22px;border:3px solid #dfe5ee;border-top-color:#1a5fb4;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 a{color:#1a5fb4;text-decoration:none}
 .md p,.md ul,.md ol,.md pre,.md blockquote,.md table{margin:0 0 6px}.md>:last-child{margin-bottom:0}
 .md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:8px 0 4px;font-size:13px;line-height:1.3;font-weight:600}.md ul,.md ol{padding-left:20px}
@@ -100,7 +102,7 @@ a{color:#1a5fb4;text-decoration:none}
     const host = document.createElement('div');
     host.setAttribute('data-a2gent-summarize', '');
     const shadow = host.attachShadow({ mode: 'closed' });
-    const out = el('div', { className: 'out busy', textContent: 'Summarizing…' });
+    const out = el('div', { className: 'out busy' }, el('div', { className: 'spinner', role: 'status', title: 'Summarizing' }));
     const bar = el('div', { className: 'bar' }, el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent' }),
       el('span', { className: 'title', textContent: 'Summary' }), el('button', { className: 'close', textContent: '×', title: 'Close', onclick: close }));
     shadow.append(el('style', { textContent: STYLE }), el('div', { className: 'panel' }, bar, out));
