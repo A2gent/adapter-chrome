@@ -6,7 +6,7 @@ const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
 const STORAGE_BASE_URL_KEY = 'a2gent.adapterChrome.baseUrl';
 const STORAGE_MODE_KEY = 'a2gent.adapterChrome.mode';
 
-const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
+const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/#/chat/${encodeURIComponent(sessionId)}`;
 
 const validateLoopbackBaseUrl = (raw) => {
   const parsed = new URL(String(raw || '').trim() || DEFAULT_BRUTE_BASE_URL);

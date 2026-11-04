@@ -64,7 +64,7 @@ test('sidebar overlay defaults occupy about 30 percent of the viewport', () => {
 test('buildSessionDetailUrl encodes Caesar session route ids', () => {
   assert.equal(
     shared.buildSessionDetailUrl('session/with spaces'),
-    'https://my.a2gent.net/chat/session%2Fwith%20spaces',
+    'https://my.a2gent.net/#/chat/session%2Fwith%20spaces',
   );
 });
 

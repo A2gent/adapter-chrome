@@ -40,7 +40,7 @@
 
   // WHY: sessions are persisted in Brute, but users inspect them in Caesar's browser UI.
   // WHAT: build the hosted Caesar chat/session-detail URL opened by the Open Session button.
-  const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/chat/${encodeURIComponent(sessionId)}`;
+  const buildSessionDetailUrl = (sessionId) => `${DEFAULT_CAESAR_BASE_URL}/#/chat/${encodeURIComponent(sessionId)}`;
 
   const storageGet = (key) => new Promise((resolve) => {
     chrome.storage.local.get([key], (result) => resolve(result[key]));

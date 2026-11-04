@@ -8,7 +8,7 @@
 
   const AGENT_KEY = 'a2gent.adapterChrome.chatAgent';
   const DEFAULT_AGENT = { id: 'biz-aristotle', name: 'Аристотель' };
-  const SESSION_URL = 'https://my.a2gent.net/chat/';
+  const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const POLL_MS = 2000;
   const REPLY_TIMEOUT_MS = 10 * 60 * 1000;
   const SCAN_DELAY_MS = 800;
