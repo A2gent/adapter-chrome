@@ -3,7 +3,8 @@
 // and never sends anything to Chat; nothing leaves the page until the user clicks a button.
 (() => {
   const googleChat = globalThis.__A2GENT_CHAT_ASSIST_GOOGLE_CHAT__;
-  if (!googleChat || globalThis.__A2GENT_CHAT_ASSIST_PANEL__) return;
+  const renderMarkdown = globalThis.__A2GENT_CHAT_ASSIST_MARKDOWN__;
+  if (!googleChat || !renderMarkdown || globalThis.__A2GENT_CHAT_ASSIST_PANEL__) return;
   globalThis.__A2GENT_CHAT_ASSIST_PANEL__ = true;
 
   const AGENT_KEY = 'a2gent.adapterChrome.chatAgent';
@@ -19,8 +20,16 @@
 *{box-sizing:border-box;font-family:inherit}.bar{display:flex;gap:4px;align-items:center;padding:2px 8px}
 select{font-size:12px;max-width:150px;padding:2px 4px;border:1px solid #c9d1dc;border-radius:5px;background:#fff;color:inherit}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
-a{margin-left:auto;font-size:12px;color:#1a5fb4;text-decoration:none}.out{margin:2px 8px 4px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
-.out.err{color:#b42318}.out:empty{display:none}`;
+a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out{margin:2px 8px 4px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
+.out.err{color:#b42318}.out:empty{display:none}
+.md{white-space:normal;overflow-wrap:break-word}.md a:hover{text-decoration:underline}
+.md p,.md ul,.md ol,.md pre,.md blockquote,.md table{margin:0 0 6px}.md>:last-child{margin-bottom:0}.md>:first-child{margin-top:0}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:8px 0 4px;font-size:13px;line-height:1.3;font-weight:600}.md h1{font-size:16px}.md h2{font-size:15px}.md h3{font-size:14px}
+.md ul,.md ol{padding-left:20px}.md li>p,.md li>ul,.md li>ol{margin:0}
+.md code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;padding:0 3px;background:#0000000f;border-radius:3px}
+.md pre{padding:6px 8px;overflow-x:auto;background:#0000000a;border-radius:5px}.md pre code{padding:0;background:none}
+.md blockquote{padding-left:8px;border-left:3px solid #c9d1dc;color:#525c6b}.md hr{margin:8px 0;border:0;border-top:1px solid #c9d1dc}
+.md table{border-collapse:collapse}.md th,.md td{padding:3px 6px;border:1px solid #c9d1dc;vertical-align:top}.md th{background:#eef1f6;font-weight:600;text-align:left}`;
 
   const widgets = new Map();
   let agents = [DEFAULT_AGENT];
@@ -97,7 +106,7 @@ a{margin-left:auto;font-size:12px;color:#1a5fb4;text-decoration:none}.out{margin
       reply || error ? button('×', 'Hide the result', () => { widget.reply = ''; widget.error = ''; render(widget); }) : null,
       sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null);
     widget.shadow.replaceChildren(el('style', { textContent: STYLE }), bar,
-      el('div', { className: error ? 'out err' : 'out', textContent: error || reply }));
+      error ? el('div', { className: 'out err', textContent: error }) : el('div', { className: 'out md' }, renderMarkdown(reply)));
   };
 
   const ask = async (widget, buildPrompt) => {

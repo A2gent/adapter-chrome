@@ -42,6 +42,7 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/peopleSync/linkedin.js',
     'src/peopleSync/panel.js',
     'src/chatAssist/googleChat.js',
+    'src/chatAssist/markdown.js',
     'src/chatAssist/panel.js',
   ]);
 
@@ -94,5 +95,5 @@ test('manifest reaches Google Chat inside the cross-origin Gmail iframes', () =>
   assert.deepEqual(entry.matches, ['https://chat.google.com/*', 'https://mail.google.com/chat/*']);
   assert.equal(entry.all_frames, true);
   // These frames do not get the top-frame document_start scripts, so the entry must be self-contained.
-  assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/panel.js']);
+  assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/markdown.js', 'src/chatAssist/panel.js']);
 });

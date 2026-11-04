@@ -31,6 +31,7 @@ const setup = (t, handlers) => {
   const attach = window.Element.prototype.attachShadow;
   window.Element.prototype.attachShadow = function attachShadow(init) { const root = attach.call(this, { ...init, mode: 'open' }); shadows.push(root); return root; };
   window.eval(source('googleChat.js'));
+  window.eval(source('markdown.js'));
   window.eval(source('panel.js'));
   const find = (selector) => shadows[0].querySelector(selector);
   const buttons = () => [...shadows[0].querySelectorAll('button')];
@@ -63,6 +64,23 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   assert.ok(calls.some((call) => call.key === 'POST /sessions/s1/start'));
   assert.equal(find('.out').textContent, 'Суть спора: релиз');
   assert.equal(document.getElementById('box').textContent, '');
+});
+
+test('the reply renders as markdown while errors stay plain text', async (t) => {
+  const { find, buttons } = setup(t, {
+    'POST /sessions': () => ({ id: 's1' }),
+    'POST /sessions/s1/start': () => ({}),
+    'GET /sessions/s1': completed('## Итог\n\n**Риск** есть'),
+  });
+  await settle();
+  buttons()[0].click();
+  await settle();
+
+  assert.equal(find('.out h2').textContent, 'Итог');
+  assert.equal(find('.out strong').textContent, 'Риск');
+  buttons()[1].click();
+  await settle();
+  assert.equal(find('.out.err').children.length, 0);
 });
 
 test('draft review continues the session through the queue without resending the thread', async (t) => {

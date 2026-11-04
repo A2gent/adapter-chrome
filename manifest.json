@@ -115,6 +115,7 @@
       ],
       "js": [
         "src/chatAssist/googleChat.js",
+        "src/chatAssist/markdown.js",
         "src/chatAssist/panel.js"
       ],
       "run_at": "document_idle",
