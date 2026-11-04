@@ -18,6 +18,7 @@ const setup = (t, handlers) => {
   const calls = [];
   window.chrome = {
     runtime: {
+      getURL: (asset) => `chrome-extension://a2gent/${asset}`,
       sendMessage: async ({ type, url: imageUrl, path: url, options }) => {
         if (type === 'A2GENT_FETCH_CHAT_IMAGE') return handlers.image(imageUrl);
         const key = `${options?.method || 'GET'} ${url}`;
@@ -56,6 +57,7 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
 
   assert.equal(document.getElementById('composer').previousElementSibling.hasAttribute('data-a2gent-chat-assist'), true);
   assert.equal(find('select').value, 'biz-aristotle');
+  assert.equal(find('.box .bar .logo').src, 'chrome-extension://a2gent/icons/a2gent-32.png');
   buttons()[0].click();
   await settle();
 

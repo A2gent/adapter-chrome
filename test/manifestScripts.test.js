@@ -71,6 +71,10 @@ test('manifest exposes content-injected images to page DOM', () => {
       resources: ['icons/a2gent-16.png'],
       matches: ['https://www.linkedin.com/*'],
     },
+    {
+      resources: ['icons/a2gent-32.png'],
+      matches: ['https://chat.google.com/*', 'https://mail.google.com/*'],
+    },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
   assert.equal(exists('icons/a2gent-16.png'), true, 'the A2gent icon must be bundled with the extension');

@@ -17,11 +17,12 @@
   const WAITING_FOR_USER = ['input_required', 'paused', 'waiting_external'];
   const CONVERSATION_KEY_LENGTH = 200;
   const HOST_ATTR = 'data-a2gent-chat-assist';
+  const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
   const STYLE = `:host{all:initial;display:block;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
-*{box-sizing:border-box;font-family:inherit}.bar{display:flex;gap:4px;align-items:center;padding:2px 8px}
+*{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.logo{flex:none;width:16px;height:16px;border-radius:3px;font-size:9px}
 select{font-size:12px;max-width:150px;padding:2px 4px;border:1px solid #c9d1dc;border-radius:5px;background:#fff;color:inherit}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
-a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar span{font-size:12px}.out{margin:2px 8px 4px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
+a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar span{font-size:12px}.out{margin:2px 6px 6px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
 .out.err{color:#b42318}.out:empty{display:none}
 .md{white-space:normal;overflow-wrap:break-word}.md a:hover{text-decoration:underline}
 .md p,.md ul,.md ol,.md pre,.md blockquote,.md table{margin:0 0 6px}.md>:last-child{margin-bottom:0}.md>:first-child{margin-top:0}
@@ -109,15 +110,15 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
       for (const other of widgets.values()) render(other);
     } }, ...agents.map((agent) => el('option', { value: agent.id, textContent: agent.name, selected: agent.id === agentId })));
     const button = (textContent, title, onclick) => el('button', { textContent, title, disabled: busy, onclick });
-    const bar = el('div', { className: 'bar' }, select,
+    const bar = el('div', { className: 'bar' }, el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent', title: 'A2gent' }), select,
       button('🔎', 'Analyze this conversation', () => analyze(widget)),
       button('📝', 'Review the draft typed in the reply box', () => reviewDraft(widget)),
       busy ? el('span', { textContent: '…' }) : null,
       imageStatus ? el('span', { textContent: imageStatus, title: imageError || 'Images sent to the agent' }) : null,
       reply || error ? button('×', 'Hide the result', () => { widget.reply = ''; widget.error = ''; render(widget); }) : null,
       sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null);
-    widget.shadow.replaceChildren(el('style', { textContent: STYLE }), bar,
-      error ? el('div', { className: 'out err', textContent: error }) : el('div', { className: 'out md' }, renderMarkdown(reply)));
+    widget.shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' }, bar,
+      error ? el('div', { className: 'out err', textContent: error }) : el('div', { className: 'out md' }, renderMarkdown(reply))));
   };
 
   const ask = async (widget, buildPrompt) => {

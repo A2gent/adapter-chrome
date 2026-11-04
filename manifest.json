@@ -146,6 +146,15 @@
       "matches": [
         "https://www.linkedin.com/*"
       ]
+    },
+    {
+      "resources": [
+        "icons/a2gent-32.png"
+      ],
+      "matches": [
+        "https://chat.google.com/*",
+        "https://mail.google.com/*"
+      ]
     }
   ],
   "options_page": "hearhear/options.html",
