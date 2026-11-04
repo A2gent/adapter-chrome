@@ -20,6 +20,7 @@ const mount = (t, handlers) => {
   const calls = [];
   window.chrome = {
     runtime: {
+      getURL: (asset) => `chrome-extension://a2gent/${asset}`,
       sendMessage: async ({ path: url, options }) => {
         const key = `${options?.method || 'GET'} ${url}`;
         calls.push({ key, body: options?.body && JSON.parse(options.body) });
@@ -46,7 +47,10 @@ test('submit sends the text and page url to a Brute session and shows the reply'
     'GET /sessions/s1': () => ({ status: 'completed', messages: [REPLY] }),
   });
 
-  assert.equal(shadow.querySelector('.avatar').textContent, 'V');
+  assert.equal(shadow.querySelector('.head').firstElementChild.className, 'avatar');
+  assert.equal(shadow.querySelector('.avatar').src, 'chrome-extension://a2gent/icons/victoria-40.png');
+  assert.equal(shadow.querySelector('.head').lastElementChild.className, 'logo');
+  assert.equal(shadow.querySelector('.logo').src, 'chrome-extension://a2gent/icons/a2gent-32.png');
   assert.equal(shadow.querySelector('textarea').value, 'Autofill');
   await submit();
 

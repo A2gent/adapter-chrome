@@ -76,12 +76,17 @@ test('manifest exposes content-injected images to page DOM', () => {
       matches: ['https://www.linkedin.com/*'],
     },
     {
-      resources: ['icons/a2gent-32.png'],
+      resources: ['icons/a2gent-32.png', 'icons/aristotle-40.png'],
       matches: ['https://chat.google.com/*', 'https://mail.google.com/*'],
+    },
+    {
+      resources: ['icons/a2gent-32.png', 'icons/victoria-40.png'],
+      matches: ['https://www.ashbyhq.com/*'],
     },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
   assert.equal(exists('icons/a2gent-16.png'), true, 'the A2gent icon must be bundled with the extension');
+  assert.equal(exists('icons/victoria-40.png'), true, 'the Ashby agent avatar must be bundled with the extension');
 });
 
 test('manifest wires the HearHear audio bundle, offscreen document and options page', () => {

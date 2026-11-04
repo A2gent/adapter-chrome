@@ -5,15 +5,17 @@
 
   const AGENT_NAME = 'Veronika (HR)';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
+  const AVATAR_URL = chrome.runtime.getURL('icons/victoria-40.png');
+  const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
   const POLL_MS = 2000;
   const REPLY_TIMEOUT_MS = 10 * 60 * 1000;
   const WAITING_FOR_USER = ['input_required', 'paused', 'waiting_external'];
   const FINISHED = ['completed', 'failed', 'paused'];
   const ALIVE_AFTER_START_ERROR = ['queued', 'running', 'completed'];
   const STYLE = `:host{all:initial;position:fixed;top:12px;right:12px;z-index:2147483647;width:300px;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
-*{box-sizing:border-box;font-family:inherit}.box{background:#fff;border:1px solid #c9d1dc;border-radius:10px;box-shadow:0 4px 16px #0003;overflow:hidden}
-.head{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#eef1f6;font-weight:600}.head a{margin-left:auto;color:#1a5fb4;text-decoration:none}
-.avatar{flex:none;width:28px;height:28px;border-radius:50%;background:#7c4dff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+*{box-sizing:border-box;font-family:inherit}.box{background:#fff;border:1px solid #1a73e8;border-radius:8px;box-shadow:0 4px 16px #0003;overflow:hidden}
+.head{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#eef1f6;font-weight:600}.name{flex:1}.head a{color:#1a5fb4;text-decoration:none}
+.avatar{flex:none;width:28px;height:28px;border-radius:50%}.logo{flex:none;width:16px;height:16px;border-radius:3px}
 .body{display:flex;flex-direction:column;gap:6px;padding:8px}textarea{width:100%;min-height:60px;resize:vertical;padding:6px;border:1px solid #c9d1dc;border-radius:6px;font-size:13px}
 button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:#1a73e8;color:#fff;padding:5px 14px;font-size:13px}button:disabled{opacity:.5;cursor:wait}
 .out{max-height:40vh;overflow:auto;padding:6px 8px;background:#f6f8fb;border-radius:6px;overflow-wrap:anywhere;user-select:text}.out.err{color:#b42318}.out:empty{display:none}
@@ -121,8 +123,9 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     const textarea = el('textarea', { value: state.text, disabled: state.busy, oninput: () => { state.text = textarea.value; } });
     const button = el('button', { textContent: 'Submit', disabled: state.busy, onclick: submit });
     shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' },
-      el('div', { className: 'head' }, el('div', { className: 'avatar', textContent: 'V', title: AGENT_NAME }), el('span', { textContent: AGENT_NAME }),
-        state.sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(state.sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null),
+      el('div', { className: 'head' }, el('img', { className: 'avatar', src: AVATAR_URL, alt: AGENT_NAME, title: AGENT_NAME }), el('span', { className: 'name', textContent: AGENT_NAME }),
+        state.sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(state.sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null,
+        el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent', title: 'A2gent' })),
       el('div', { className: 'body' }, textarea, button,
         state.status ? el('span', { className: 'status', textContent: state.status }) : null,
         state.error ? el('div', { className: 'out err', textContent: state.error }) : el('div', { className: 'out md' }, renderMarkdown(state.reply)))));

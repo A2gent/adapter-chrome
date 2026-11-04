@@ -179,6 +179,15 @@
         "https://chat.google.com/*",
         "https://mail.google.com/*"
       ]
+    },
+    {
+      "resources": [
+        "icons/a2gent-32.png",
+        "icons/victoria-40.png"
+      ],
+      "matches": [
+        "https://www.ashbyhq.com/*"
+      ]
     }
   ],
   "options_page": "hearhear/options.html",
