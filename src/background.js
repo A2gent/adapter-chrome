@@ -1,5 +1,5 @@
 // HearHear (audio mode) is bundled by `npm run build`; it registers its own message listeners.
-if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js');
+if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js', 'adblock/background.js');
 
 const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
 const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
@@ -94,6 +94,8 @@ const fetchBruteJson = async (request) => {
 };
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
+
+globalThis.A2gentAdblockBackground?.install({ chrome, fetchBruteJson, errorMessage });
 
 // WHY: pages such as x.com ship a CSP without 'unsafe-eval', so the in-page eval used by
 // pageHook.js throws EvalError. Injecting a function through chrome.scripting does not help:

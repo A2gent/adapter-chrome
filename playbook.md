@@ -23,3 +23,6 @@
 - HearHear bundles live in git-ignored dist/: run `npm run build` before loading or running tests that import dist assets; the two browserControlBridge test failures predate the merge.
 - MV3 `importScripts()` paths resolve relative to the service worker file (`src/`), not the extension root: use `../dist/...`, else Chrome fails with "Service worker registration failed. Status code: 15".
 - Extension CSP `connect-src` needs explicit `ws://`/`wss://` hosts for the Brute WebSocket (`http://localhost:*` does not cover it); `[::1]` sources are invalid in CSP and only produce warnings.
+- `new URL('', base)` returns `base`, and `iframe.src` is empty for Google Publisher Tag frames. Guard empty URLs, or ad frames look hosted by the page itself. Synthetic tests missed this; check DOM heuristics on a real ad-heavy page.
+- Headless Chrome with a fresh profile gets no ads on consent-gated sites, so an empty candidate list there says nothing. Inspect the user's real tab read-only instead.
+- Full extension smoke test: spawn Chrome with `--remote-debugging-pipe --enable-unsafe-extension-debugging`, call CDP `Extensions.loadUnpacked`, then evaluate in the service worker target. This catches `importScripts` and DNR rule errors that unit tests cannot.

@@ -27,6 +27,17 @@ A toolbar above each Google Chat composer, in Gmail and on chat.google.com, inde
 - Sessions are created with `skip_telegram_sync`, so conversations are not mirrored to a Telegram topic.
 - Message parsing expects the English Chat UI labels for reactions and reply counters.
 
+## Adblock (System One)
+
+The 🛡️ row in the toolbar popup turns on a self-learning ad blocker. It is off by default and works in every mode.
+
+- The page is scanned for ad-looking blocks (iframes, `banner`/`ad`/`sponsor` names, pinned bars). Unknown ones go through the service worker to `POST /browser-extension/adblock/classify`, where Brute asks System One whether each is an ad.
+- Verdicts are cached per site in `chrome.storage.local` (`a2gent.adapterChrome.adblock`), so repeat visits hide known ads with no classifier call. Confident third-party ad frames also become `declarativeNetRequest` rules scoped to that site.
+- Sent per block: site host, tag, id/classes, frame and link hosts (no paths or queries), size and position. Text is sent only when the block leads to another site. Classifier traffic goes to Jev unless System One uses LM Studio. Private hosts (`localhost`, `.local`, `.lan`, `.corp`, ...) are never scanned.
+- Page structure, forms, inputs, video and blocks over 70% of the viewport are never hidden, and the checks re-run on every page.
+- Spend is capped at 3 requests per page load, 30 per site and 300 in total per day; errors pause classification for 10 minutes.
+- ⏸️ pauses the current site; ↺ forgets what was learned there, which is the fix for a wrongly hidden block. Source: `src/adblock/`.
+
 ## Setup
 
 1. Start Brute locally. The default HTTP API port is `5445`:

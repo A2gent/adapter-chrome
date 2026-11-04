@@ -11,7 +11,7 @@ const exists = (relativePath) => fs.existsSync(path.join(repoRoot, relativePath)
 test('manifest content scripts support web pages and local files', () => {
   // The HearHear bundle is http(s)-only: articles are not read from local files.
   // LinkedIn sync mode scripts run only on LinkedIn.
-  const scoped = (item) => ['dist/hearhear-content.js', 'src/peopleSync/panel.js', 'src/chatAssist/panel.js'].some((file) => item.js.includes(file));
+  const scoped = (item) => ['dist/hearhear-content.js', 'src/peopleSync/panel.js', 'src/adblock/content.js', 'src/chatAssist/panel.js'].some((file) => item.js.includes(file));
   for (const entry of manifest.content_scripts.filter((item) => !scoped(item))) {
     assert.deepEqual(entry.matches, ['http://*/*', 'https://*/*', 'file:///*']);
   }
@@ -38,6 +38,7 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/contentScript/renderWiring.js',
     'src/contentScript.js',
     'src/browserControlBridge.js',
+    'src/adblock/content.js',
     'src/peopleSync/linkedin.js',
     'src/peopleSync/panel.js',
     'src/chatAssist/googleChat.js',
