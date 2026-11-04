@@ -8,6 +8,8 @@
   const POLL_MS = 2000;
   const REPLY_TIMEOUT_MS = 10 * 60 * 1000;
   const WAITING_FOR_USER = ['input_required', 'paused', 'waiting_external'];
+  const FINISHED = ['completed', 'failed', 'paused'];
+  const ALIVE_AFTER_START_ERROR = ['queued', 'running', 'completed'];
   const STYLE = `:host{all:initial;position:fixed;top:12px;right:12px;z-index:2147483647;width:300px;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
 *{box-sizing:border-box;font-family:inherit}.box{background:#fff;border:1px solid #c9d1dc;border-radius:10px;box-shadow:0 4px 16px #0003;overflow:hidden}
 .head{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#eef1f6;font-weight:600}.head a{margin-left:auto;color:#1a5fb4;text-decoration:none}
@@ -21,7 +23,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     const proxied = await chrome.runtime.sendMessage({ type: 'A2GENT_BRUTE_API_FETCH', path, options });
     if (!proxied?.ok) throw new Error(proxied?.error || 'Brute request failed.');
     const { response } = proxied;
-    if (!response?.ok) throw new Error(response?.body?.error || response?.bodyText || `HTTP ${response?.status}`);
+    if (!response?.ok) throw Object.assign(new Error(response?.body?.error || response?.bodyText || `HTTP ${response?.status}`), { status: response?.status });
     return response.body;
   };
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
@@ -29,12 +31,10 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
   const assistantReplies = (session) => (session?.messages || []).filter((message) => message.role === 'assistant' && message.content?.trim());
 
   const findAgent = async () => {
-    try {
-      const body = await api('/unified-agents/');
-      return (Array.isArray(body?.agents) ? body.agents : []).find((agent) => agent.id && agent.name?.startsWith('Veronika'));
-    } catch {
-      return undefined;
-    }
+    const body = await api('/unified-agents/');
+    const agent = (Array.isArray(body?.agents) ? body.agents : []).find((candidate) => candidate.id && candidate.name === AGENT_NAME);
+    if (!agent) throw new Error('HR agent Veronika not found');
+    return agent;
   };
 
   const buildTask = (text) => `${text}\n\nPage: ${location.href}`;
@@ -43,20 +43,24 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     const agent = await findAgent();
     const session = await post('/sessions', {
       agent_id: 'build',
-      ...(agent ? { unified_agent_id: agent.id } : {}),
+      unified_agent_id: agent.id,
       queued: true,
       queue_mode: 'serial',
       task,
       metadata: {
         source: 'ashby',
         launch_target: 'agent',
-        ...(agent ? { launch_agent_id: agent.id } : {}),
-        launch_agent_name: agent?.name || AGENT_NAME,
+        launch_agent_id: agent.id,
+        launch_agent_name: agent.name,
         skip_telegram_sync: true,
       },
     });
-    await post(`/sessions/${encodeURIComponent(session.id)}/start`, {}).catch(() => {});
-    return session.id;
+    Object.assign(state, { sessionId: session.id, known: 0, awaiting: true });
+    await post(`/sessions/${encodeURIComponent(session.id)}/start`, {}).catch(async (err) => {
+      if (err.status === 409) return;
+      const current = await api(`/sessions/${encodeURIComponent(session.id)}`).catch(() => null);
+      if (!ALIVE_AFTER_START_ERROR.includes(current?.status)) throw err;
+    });
   };
 
   const waitForReplies = async (sessionId, known) => {
@@ -79,7 +83,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     return node;
   };
 
-  const state = { busy: false, error: '', reply: '', status: '', sessionId: '', text: 'Autofill' };
+  const state = { awaiting: false, busy: false, error: '', known: 0, reply: '', status: '', sessionId: '', text: 'Autofill' };
   const host = document.createElement('div');
   host.setAttribute('data-a2gent-ashby', '');
   for (const type of ['click', 'mousedown', 'keydown', 'keyup']) host.addEventListener(type, (event) => event.stopPropagation());
@@ -92,15 +96,19 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     try {
       const session = state.sessionId ? await api(`/sessions/${encodeURIComponent(state.sessionId)}`) : null;
       const reusable = session?.status === 'completed';
-      const known = reusable ? assistantReplies(session).length : 0;
-      const task = buildTask(state.text.trim());
-      if (reusable) await post(`/sessions/${encodeURIComponent(state.sessionId)}/queue`, { message: task });
-      else state.sessionId = await startSession(task);
-      state.status = 'Working…';
+      const unseenReply = reusable && state.awaiting && assistantReplies(session).length > state.known;
+      const resume = Boolean(session) && (!FINISHED.includes(session.status) || unseenReply);
+      if (!resume) {
+        const task = buildTask(state.text.trim());
+        if (reusable) {
+          await post(`/sessions/${encodeURIComponent(state.sessionId)}/queue`, { message: task });
+          Object.assign(state, { known: assistantReplies(session).length, awaiting: true });
+        } else await startSession(task);
+      }
+      state.status = resume ? 'Still working on the previous request…' : 'Working…';
       render();
-      const replies = await waitForReplies(state.sessionId, known);
-      state.reply = replies[replies.length - 1].content.trim();
-      state.status = 'Done';
+      const replies = await waitForReplies(state.sessionId, state.known);
+      Object.assign(state, { awaiting: false, reply: replies[replies.length - 1].content.trim(), status: 'Done' });
     } catch (err) {
       state.error = err.message;
       state.status = '';
