@@ -2,10 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 
-const { adContainer, applyLearned, createScanner, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector } = require('../../src/adblock/content.js');
+const { adContainer, applyLearned, createScanner, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector, start } = require('../../src/adblock/content.js');
 
-const page = (body) => {
-  const { window } = new JSDOM(`<!doctype html><body>${body}</body>`, { url: 'https://news.ee/', pretendToBeVisual: true });
+const page = (body, url = 'https://news.ee/') => {
+  const { window } = new JSDOM(`<!doctype html><body>${body}</body>`, { url, pretendToBeVisual: true });
   Object.defineProperty(window, 'innerWidth', { value: 1000 });
   Object.defineProperty(window, 'innerHeight', { value: 800 });
   window.Element.prototype.getBoundingClientRect = function rect() {
@@ -343,6 +343,56 @@ test('a scan does not send a second request while the model is still answering',
   assert.equal(await first, true);
   void scan();
   assert.equal(calls, 2);
+});
+
+const author = (time = '') => `<div data-testid="User-Name"><a href="/someone">Someone</a>${time}</div>`;
+const stamp = '<time datetime="2026-11-04"></time>';
+const post = (id, inner) => `<div id="${id}" data-testid="cellInnerDiv"><article data-testid="tweet">${inner}</article></div>`;
+
+test('X promoted posts hide in any language, real posts stay', () => {
+  const { doc, win } = page(`
+    ${post('ad', `${author()}<span>Реклама</span>`)}
+    ${post('ad-quoting', `${author()}<span>Ad</span><div role="link">${author(stamp)}</div>`)}
+    ${post('regular', author(stamp))}
+    ${post('quoting', `${author(stamp)}<div role="link">${author(stamp)}</div>`)}
+    ${post('opened', `${author()}<a href="/someone/status/1">${stamp}</a>`)}
+    ${post('tombstone', 'This post is unavailable')}
+    <div id="spacer" data-testid="cellInnerDiv"></div>`, 'https://x.com/home');
+  hideCertainAds(doc, win);
+  for (const id of ['ad', 'ad-quoting']) assert.equal(doc.getElementById(id).style.display, 'none', id);
+  for (const id of ['regular', 'quoting', 'opened', 'tombstone', 'spacer']) assert.equal(doc.getElementById(id).style.display, '', id);
+});
+
+test('a feed cell reused for a real post comes back', () => {
+  const { doc, win } = page(post('cell', author()), 'https://twitter.com/home');
+  hideCertainAds(doc, win);
+  assert.equal(doc.getElementById('cell').style.display, 'none');
+  doc.querySelector('[data-testid="User-Name"]').insertAdjacentHTML('beforeend', stamp);
+  hideCertainAds(doc, win);
+  assert.equal(doc.getElementById('cell').style.display, '');
+});
+
+test('a promoted post loaded while scrolling hides before the next scan timer', async () => {
+  const { doc, win } = page('<div id="feed"></div>', 'https://x.com/home');
+  win.chrome = { storage: { local: { get: (_key, done) => done({ 'a2gent.adapterChrome.adblock': { enabled: true } }) } } };
+  start(win);
+  doc.getElementById('feed').insertAdjacentHTML('beforeend', post('late', author()));
+  await Promise.resolve();
+  assert.equal(doc.getElementById('late').style.display, 'none');
+  win.close();
+});
+
+test('the same markup on another site is left alone', () => {
+  const { doc, win } = page(post('cell', author()));
+  hideCertainAds(doc, win);
+  assert.equal(doc.getElementById('cell').style.display, '');
+});
+
+test('link cards inside X posts never reach the model or a learned selector', () => {
+  const { doc, win } = page(post('cell', `${author(stamp)}<div id="card" class="banner"><a href="https://shop.ee/x"><img src="/x.png">Read</a></div>`), 'https://x.com/home');
+  assert.deepEqual(findCandidates(doc, win), []);
+  applyLearned(doc, win, { '#card': 'ad' });
+  assert.equal(doc.getElementById('card').style.display, '');
 });
 
 test('private hosts are skipped so intranet content is never sent out', () => {

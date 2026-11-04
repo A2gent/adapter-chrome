@@ -26,6 +26,10 @@
   const AD_SLOT_SELECTOR = 'iframe[id^="google_ads_iframe"], ins.adsbygoogle';
   const CERTAIN_AD_SELECTOR = `${AD_SLOT_SELECTOR}, iframe[src*="doubleclick.net"], iframe[src*="googlesyndication.com"], a[href*="doubleclick.net"], a[href*="googleadservices.com"]`;
   const AD_NETWORK_HOST = /(?:^|\.)(?:doubleclick\.net|googlesyndication\.com|googleadservices\.com)$/;
+  const X_HOST = /(?:^|\.)(?:x|twitter)\.com$/;
+  const FEED_POST = 'article[data-testid="tweet"]';
+  const FEED_CELL = '[data-testid="cellInnerDiv"]';
+  const AD_CARRIER_SELECTOR = `${CERTAIN_AD_SELECTOR}, ${FEED_POST}`;
   const HINT_SELECTOR = [
     'iframe', 'ins.adsbygoogle', '[data-ad-slot]', '[data-google-query-id]', '[id^="google_ads" i]',
     '[id*="banner" i]', '[class*="banner" i]', '[id*="advert" i]', '[class*="advert" i]',
@@ -33,7 +37,7 @@
   ].join(',');
   // Page structure and anything the user types into must never disappear with an ad.
   const PROTECTED_SELECTOR = 'main, article, nav, header, footer, h1, form, input, textarea, select, video, [contenteditable], [role=main], [role=navigation], [role=dialog]';
-  const PROTECTED_ANCESTORS = 'form, nav, [role=navigation], [role=dialog], [id^="a2gent"]';
+  const PROTECTED_ANCESTORS = `form, nav, [role=navigation], [role=dialog], [id^="a2gent"], ${FEED_POST}`;
   const PROTECTED_TAGS = new Set(['HTML', 'BODY', 'MAIN', 'ARTICLE', 'NAV', 'HEADER', 'FOOTER']);
   const TOOL_FRAME_HOST = /(?:^|\.)(?:google\.com|gstatic\.com|recaptcha\.net|hcaptcha\.com|cloudflare\.com|youtube\.com|youtube-nocookie\.com|vimeo\.com|stripe\.com|paypal\.com)$/;
   const AD_NAME = /(?:^|[\s_-])(?:ads?|dfp)(?:[\s_-]|$)/i;
@@ -211,6 +215,26 @@
 
   const hide = (element) => element.style.setProperty('display', 'none', 'important');
 
+  // WHY: X's ad label is a plain translated span, but a promoted post is the only one without a
+  // timestamp. Counting per author keeps a timestamp inside a quoted post from masking the ad,
+  // and an opened post, whose time sits below its header, still has one of each.
+  const isPromotedPost = (post) => post.querySelectorAll('time').length < post.querySelectorAll('[data-testid="User-Name"]').length;
+
+  const promotedCells = new WeakSet();
+
+  // The whole cell goes, because the feed closes the gap only when the cell itself loses its height.
+  // The feed may reuse a cell for another post, so a hidden one is released once it stops being an ad.
+  const hidePromotedPosts = (doc) => {
+    if (!X_HOST.test(doc.location.hostname)) return;
+    for (const cell of doc.querySelectorAll(FEED_CELL)) {
+      const post = cell.querySelector(FEED_POST);
+      if (post && isPromotedPost(post)) {
+        hide(cell);
+        promotedCells.add(cell);
+      } else if (promotedCells.delete(cell)) cell.style.removeProperty('display');
+    }
+  };
+
   const certainHides = new Map();
 
   const isCertainAd = (element, win) => {
@@ -226,6 +250,7 @@
   // site. The same goes for feeds filled later, so wrappers are rechecked and released when they fill up.
   // Size limits stay off for the slot itself: a full-screen interstitial is exactly what must go.
   const hideCertainAds = (doc, win) => {
+    hidePromotedPosts(doc);
     const parsing = doc.readyState === 'loading';
     for (const element of doc.querySelectorAll(CERTAIN_AD_SELECTOR)) {
       if (certainHides.has(element) || element.closest(PROTECTED_ANCESTORS) || !isCertainAd(element, win)) continue;
@@ -242,7 +267,7 @@
     }
   };
 
-  const addsCertainAd = ({ addedNodes }) => [...addedNodes].some((node) => node.nodeType === 1 && (node.matches(CERTAIN_AD_SELECTOR) || node.querySelector(CERTAIN_AD_SELECTOR)));
+  const addsCertainAd = ({ addedNodes }) => [...addedNodes].some((node) => node.nodeType === 1 && (node.matches(AD_CARRIER_SELECTOR) || node.querySelector(AD_CARRIER_SELECTOR)));
 
   // WHY: a verdict came from one page, but the selector may match different blocks on another
   // page of the site, so the safety checks run again here instead of living in a blanket CSS rule.

@@ -26,3 +26,5 @@
 - `new URL('', base)` returns `base`, and `iframe.src` is empty for Google Publisher Tag frames. Guard empty URLs, or ad frames look hosted by the page itself. Synthetic tests missed this; check DOM heuristics on a real ad-heavy page.
 - Headless Chrome with a fresh profile gets no ads on consent-gated sites, so an empty candidate list there says nothing. Inspect the user's real tab read-only instead.
 - Full extension smoke test: spawn Chrome with `--remote-debugging-pipe --enable-unsafe-extension-debugging`, call CDP `Extensions.loadUnpacked`, then evaluate in the service worker target. This catches `importScripts` and DNR rule errors that unit tests cannot.
+- The asdf `node` shim comes first on PATH and fails here with "No version is set": prefix commands with `export PATH="$HOME/.nvm/versions/node/v24.22.1/bin:$PATH"`. `ls` is aliased to eza, so do not parse its output in scripts.
+- To check an ad rule on X, open a separate tab through the `chrome_extension` tool: the user keeps browsing in their own tab, and the feed holds only about 15 posts in the DOM, so collect them while scrolling. `node --test` takes files, not a folder.
