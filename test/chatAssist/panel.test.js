@@ -55,7 +55,7 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   });
   await settle();
 
-  assert.equal(document.getElementById('composer').previousElementSibling.hasAttribute('data-a2gent-chat-assist'), true);
+  assert.equal(document.getElementById('composer').firstElementChild.hasAttribute('data-a2gent-chat-assist'), true);
   assert.equal(find('select').value, 'biz-aristotle');
   assert.equal(find('.box .bar .logo').src, 'chrome-extension://a2gent/icons/a2gent-32.png');
   buttons()[0].click();

@@ -29,6 +29,7 @@ const pane = (messages) => {
   const dom = new JSDOM(`<div id="pane"><c-wiz id="list">${messages.map(() => '<div role="group"></div>').join('')}<div role="group" id="empty"></div></c-wiz>
     <div id="composer"><c-wiz><div role="group"><div id="box" role="textbox" contenteditable="true"></div></div></c-wiz></div></div>`);
   const { document } = dom.window;
+  dom.window.Element.prototype.getClientRects = () => [{}];
   [...document.querySelectorAll('#list [role="group"]:not(#empty)')].forEach((group, index) => { group.innerText = messages[index]; });
   return document;
 };
@@ -45,6 +46,36 @@ test('conversationFor stops at the pane holding messages, not at groups inside t
   const { pane: found, composer } = googleChat.conversationFor(document.getElementById('box'));
   assert.equal(found.id, 'pane');
   assert.equal(composer.id, 'composer');
+});
+
+test('a follow-up without a sender line keeps its body and the sender of the run', () => {
+  const document = pane(['You\n,\n3 min\n,\nEdited\n,\nReport\n,\n3 min\n,\nEdited\n,\n3 replies', 'Meet at 10:30\nSecond line\n,\n3 min\n,', 'You\n,\nNow\n,\nThird\n,\nNow\n,']);
+  document.querySelectorAll('#list [role="group"]').forEach((group) => group.setAttribute('data-user-id', 'u1'));
+  assert.deepEqual(googleChat.parseMessages(document.getElementById('pane')).map(({ sender, time, body }) => [sender, time, body]), [
+    ['You', '3 min', 'Report'], ['You', '3 min', 'Meet at 10:30\nSecond line'], ['You', 'Now', 'Third'],
+  ]);
+});
+
+test('an image-only message of a new author keeps the sender line', () => {
+  const document = pane(['Ann\n,\n9:00 AM\n,\nFirst', 'Bob\n,\n9:01 AM\n,']);
+  const [first, second] = document.querySelectorAll('#list [role="group"]');
+  first.setAttribute('data-user-id', 'u1');
+  second.setAttribute('data-user-id', 'u2');
+  assert.deepEqual(googleChat.parseMessages(document.getElementById('pane'))[1], { sender: 'Bob', time: '9:01 AM', body: '', images: [] });
+});
+
+test('an open thread is not mistaken for the hidden conversation next to it, and the toolbar anchors to the composer region', () => {
+  const { window } = new JSDOM(`<div id="row">
+    <div id="hidden"><c-wiz><div role="group" id="old"></div></c-wiz></div>
+    <div id="thread"><c-wiz><div role="group" id="fresh"></div></c-wiz>
+      <div id="wrap"><c-wiz role="region" id="region"><div id="box" role="textbox" contenteditable="true"></div></c-wiz></div></div></div>`);
+  const { document } = window;
+  window.Element.prototype.getClientRects = function rects() { return this.id === 'old' ? [] : [{}]; };
+  document.getElementById('old').innerText = 'Ann\n,\n9:00 AM\n,\nOther conversation';
+  document.getElementById('fresh').innerText = 'You\n,\n3 min\n,\nThis thread\n,\n3 min\n,';
+  const { pane: found, composer } = googleChat.conversationFor(document.getElementById('box'));
+  assert.equal(found.id, 'thread');
+  assert.equal(composer.id, 'region');
 });
 
 test('composers skips hidden textboxes and contenteditable=false', () => {

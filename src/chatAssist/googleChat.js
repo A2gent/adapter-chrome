@@ -5,7 +5,8 @@
   if (typeof module === 'object' && module.exports) module.exports = exported;
   if (root) root.__A2GENT_CHAT_ASSIST_GOOGLE_CHAT__ = exported;
 })(typeof globalThis !== 'undefined' ? globalThis : this, () => {
-  const TIME = /\d{1,2}:\d{2}(?:\s?[AP]M)?$/im;
+  // Fresh messages show a relative time ("3 min", "Now") instead of a clock time.
+  const TIME = /^(?:[a-z]{3,9}(?: \d{1,2})?,? )?(?:\d{4},? )?\d{1,2}:\d{2}(?:\s?[AP]M)?$|^\d+\s?(?:min|hr)s?$|^Now$/im;
   const UNREAD = /^\d+ unread,?$/i;
   const REPLIES = /^,?\s*\d+ repl(?:y|ies)\b/i;
   const REACTION_BUTTON = 'Add reaction';
@@ -37,7 +38,7 @@
     return lines.slice(0, end);
   };
 
-  const parseMessage = (text) => {
+  const parseMessage = (text, runSender) => {
     const lines = String(text || '').split('\n').map((line) => line.trim()).filter((line) => line && !UNREAD.test(line));
     const parts = segments(lines);
     const timeIndex = parts.findIndex(isTime);
@@ -47,12 +48,16 @@
     const body = parts.slice(timeIndex + 1)
       .filter((segment) => segment.join() !== time && segment.join() !== EDITED)
       .flatMap((segment) => withoutReactions(segment).filter((line) => !REPLIES.test(line)));
+    // A follow-up in one author's run has no sender line, so its body comes before the time.
+    if (runSender && !body.length && timeIndex > 0 && parts[0][0] !== runSender) {
+      return { sender: '', time, body: parts.slice(0, timeIndex).flat().join('\n') };
+    }
     // Consecutive messages of one author may omit the sender line.
     return { sender: timeIndex > 0 ? parts[0][0] : '', time, body: body.join('\n') };
   };
 
   const messageGroups = (root) => [...root.querySelectorAll('c-wiz [role="group"]')]
-    .filter((group) => !group.parentElement?.closest('[role="group"]') && TIME.test(visibleText(group)));
+    .filter((group) => group.getClientRects().length > 0 && !group.parentElement?.closest('[role="group"]') && TIME.test(visibleText(group)));
 
   const messageImages = (group) => [...group.querySelectorAll('img')]
     .filter((image) => {
@@ -64,10 +69,14 @@
 
   const parseMessages = (root) => {
     const messages = [];
+    let previousUser = null;
     for (const group of messageGroups(root)) {
-      const message = parseMessage(visibleText(group));
+      const lastSender = messages[messages.length - 1]?.sender || '';
+      const user = group.getAttribute('data-user-id');
+      const message = parseMessage(visibleText(group), user && user === previousUser ? lastSender : '');
       if (!message) continue;
-      messages.push({ ...message, sender: message.sender || messages[messages.length - 1]?.sender || '', images: messageImages(group) });
+      previousUser = user;
+      messages.push({ ...message, sender: message.sender || lastSender, images: messageImages(group) });
     }
     return messages;
   };
@@ -81,11 +90,12 @@
     .filter((textbox) => textbox.getClientRects().length > 0);
 
   // Each pane (a space or an open thread) has its own composer, so the nearest ancestor that holds
-  // messages is the conversation this composer replies to.
+  // visible messages is the conversation this composer replies to. Chat keeps the previous
+  // conversation hidden next to an open thread, which is why hidden messages must not count.
   const conversationFor = (textbox) => {
     let composer = textbox;
     for (let pane = textbox.parentElement; pane; composer = pane, pane = pane.parentElement) {
-      if (messageGroups(pane).length) return { pane, composer };
+      if (messageGroups(pane).length) return { pane, composer: textbox.closest('[role="region"]') || composer };
     }
     return null;
   };

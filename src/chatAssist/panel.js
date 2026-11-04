@@ -201,7 +201,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar
     for (const [textbox, widget] of widgets) {
       widget.host.hidden = !visible.has(textbox);
       if (!widget.composer.isConnected) Object.assign(widget, googleChat.conversationFor(textbox));
-      if (!widget.host.isConnected) widget.composer.before(widget.host);
+      if (!widget.host.isConnected) widget.composer.prepend(widget.host);
     }
   };
 
