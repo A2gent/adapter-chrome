@@ -172,7 +172,8 @@
     },
     {
       "resources": [
-        "icons/a2gent-32.png"
+        "icons/a2gent-32.png",
+        "icons/aristotle-40.png"
       ],
       "matches": [
         "https://chat.google.com/*",
