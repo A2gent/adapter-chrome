@@ -57,6 +57,8 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   assert.equal(document.getElementById('composer').firstElementChild.hasAttribute('data-a2gent-chat-assist'), true);
   assert.equal(find('select'), null);
   assert.equal(find('.box .bar .avatar').src, 'chrome-extension://a2gent/icons/aristotle-40.png');
+  assert.equal(find('.box .bar').firstElementChild.className, 'avatar');
+  assert.equal(find('.box .bar').lastElementChild.className, 'logo');
   buttons()[0].click();
   await settle();
 
