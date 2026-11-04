@@ -19,7 +19,7 @@
   const AVATAR_URL = chrome.runtime.getURL('icons/aristotle-40.png');
   const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
   const STYLE = `:host{all:initial;display:block;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
-*{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.avatar{flex:none;width:20px;height:20px;border-radius:50%}.name{flex:none;white-space:nowrap;color:#525c6b}.logo{flex:none;width:16px;height:16px;margin-left:auto;border-radius:3px}
+*{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.avatar{flex:none;width:20px;height:20px;border-radius:50%}.name{flex:none;white-space:nowrap;color:#525c6b}.via{flex:none;white-space:nowrap;margin-left:auto;font-size:11px;color:#9aa3b2}.logo{flex:none;width:16px;height:16px;border-radius:3px}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
 a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6px 6px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
 .out.err{color:#b42318}.out:empty{display:none}
@@ -103,13 +103,14 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
     const button = (textContent, title, onclick) => el('button', { textContent, title, disabled: busy, onclick });
     const bar = el('div', { className: 'bar' },
       el('img', { className: 'avatar', src: AVATAR_URL, alt: AGENT.name, title: AGENT.name }),
-      el('span', { className: 'name', textContent: 'Aristotle via Agent ²' }),
+      el('span', { className: 'name', textContent: 'Aristotle' }),
       button('🔎', 'Analyze this conversation', () => analyze(widget)),
       button('📝', 'Review the draft typed in the reply box', () => reviewDraft(widget)),
       busy ? el('span', { textContent: '…' }) : null,
       imageStatus ? el('span', { textContent: imageStatus, title: imageError || 'Images sent to the agent' }) : null,
       reply || error ? button('×', 'Hide the result', () => { widget.reply = ''; widget.error = ''; render(widget); }) : null,
       sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null,
+      el('span', { className: 'via', textContent: 'via Agent ²' }),
       el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent', title: 'A2gent' }));
     widget.shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' }, bar,
       error ? el('div', { className: 'out err', textContent: error }) : el('div', { className: 'out md' }, renderMarkdown(reply))));
