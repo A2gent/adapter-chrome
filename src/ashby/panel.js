@@ -6,6 +6,7 @@
   const AGENT_NAME = 'Veronika (HR)';
   const DISPLAY_NAME = 'Veronica';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
+  const KNOWLEDGE_BASE_PROJECT_ID = 'system-kb';
   const AVATAR_URL = chrome.runtime.getURL('icons/victoria-40.png');
   const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
   const POLL_MS = 2000;
@@ -47,6 +48,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     const session = await post('/sessions', {
       agent_id: 'build',
       unified_agent_id: agent.id,
+      project_id: KNOWLEDGE_BASE_PROJECT_ID,
       queued: true,
       queue_mode: 'serial',
       task,

@@ -60,6 +60,7 @@ test('submit sends the text and page url to a Brute session and shows the reply'
   const created = calls.find((call) => call.key === 'POST /sessions').body;
   assert.equal(created.task, 'Autofill\n\nPage: https://www.ashbyhq.com/careers?ashby_jid=1');
   assert.equal(created.unified_agent_id, 'biz-veronika');
+  assert.equal(created.project_id, 'system-kb');
   assert.equal(created.metadata.skip_telegram_sync, true);
   assert.match(shadow.querySelector('.out').textContent, /Form filled/);
 });
