@@ -58,6 +58,7 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   assert.equal(find('select'), null);
   assert.equal(find('.box .bar .avatar').src, 'chrome-extension://a2gent/icons/aristotle-40.png');
   assert.equal(find('.box .bar').firstElementChild.className, 'avatar');
+  assert.equal(find('.box .bar .name').textContent, 'Aristotle via Agent ²');
   assert.equal(find('.box .bar').lastElementChild.className, 'logo');
   buttons()[0].click();
   await settle();
@@ -97,8 +98,8 @@ test('analyze attaches thread images and tells the agent which ones failed', asy
   assert.match(created.task, /Can we ship\?\n\[image 1\]\n\[image 2\]/);
   assert.match(created.task, /по порядку: \[image 2\]/);
   assert.match(created.task, /Не удалось загрузить: \[image 1\]/);
-  assert.equal(context.find('.bar span').textContent, '🖼 1/2');
-  assert.equal(context.find('.bar span').title, 'HTTP 403');
+  assert.equal(context.find('.bar span:not(.name)').textContent, '🖼 1/2');
+  assert.equal(context.find('.bar span:not(.name)').title, 'HTTP 403');
 });
 
 test('draft review does not resend images the session already has', async (t) => {
