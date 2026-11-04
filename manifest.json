@@ -38,7 +38,8 @@
     "https://chat.google.com/*",
     "https://mail.google.com/*",
     "https://lh3.google.com/*",
-    "https://*.googleusercontent.com/*"
+    "https://*.googleusercontent.com/*",
+    "https://www.ashbyhq.com/*"
   ],
   "background": {
     "service_worker": "src/background.js"
@@ -138,6 +139,16 @@
       "run_at": "document_idle",
       "all_frames": true,
       "match_about_blank": true
+    },
+    {
+      "matches": [
+        "https://www.ashbyhq.com/*"
+      ],
+      "js": [
+        "src/chatAssist/markdown.js",
+        "src/ashby/panel.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
