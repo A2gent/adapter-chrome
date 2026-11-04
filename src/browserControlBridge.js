@@ -544,7 +544,8 @@
   // WHAT: detect that specific failure and retry the same script through the CDP bridge.
   const isCspEvalBlock = (error) => {
     const text = String(error?.message || error || '');
-    return /unsafe-eval|Content Security Policy/i.test(text);
+    // Gmail and Google Chat enforce Trusted Types, which reject eval with their own message.
+    return /unsafe-eval|Content Security Policy|Trusted Type/i.test(text);
   };
 
   const evaluateViaCdp = async (script, timeoutMs = 15000) => {

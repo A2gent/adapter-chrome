@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "A2gent Brute Browser Adapter",
   "version": "0.1.0",
-  "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), or sync LinkedIn profiles into Brute person cards (sync mode).",
+  "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), sync LinkedIn profiles into Brute person cards (sync mode), or review Google Chat threads and reply drafts with a Brute agent.",
   "action": {
     "default_title": "A2gent: pick a mode",
     "default_popup": "src/popup.html",
@@ -96,6 +96,19 @@
         "src/peopleSync/panel.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chat.google.com/*",
+        "https://mail.google.com/chat/*"
+      ],
+      "js": [
+        "src/chatAssist/googleChat.js",
+        "src/chatAssist/panel.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "web_accessible_resources": [

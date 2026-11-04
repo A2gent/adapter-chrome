@@ -11,7 +11,7 @@ const exists = (relativePath) => fs.existsSync(path.join(repoRoot, relativePath)
 test('manifest content scripts support web pages and local files', () => {
   // The HearHear bundle is http(s)-only: articles are not read from local files.
   // LinkedIn sync mode scripts run only on LinkedIn.
-  const scoped = (item) => item.js.includes('dist/hearhear-content.js') || item.js.includes('src/peopleSync/panel.js');
+  const scoped = (item) => ['dist/hearhear-content.js', 'src/peopleSync/panel.js', 'src/chatAssist/panel.js'].some((file) => item.js.includes(file));
   for (const entry of manifest.content_scripts.filter((item) => !scoped(item))) {
     assert.deepEqual(entry.matches, ['http://*/*', 'https://*/*', 'file:///*']);
   }
@@ -40,6 +40,8 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/browserControlBridge.js',
     'src/peopleSync/linkedin.js',
     'src/peopleSync/panel.js',
+    'src/chatAssist/googleChat.js',
+    'src/chatAssist/panel.js',
   ]);
 
   for (const relativePath of scriptFiles) {
@@ -84,4 +86,12 @@ test('manifest loads LinkedIn sync scripts only on LinkedIn, after the shared he
   assert.deepEqual(entry.js, ['src/peopleSync/linkedin.js', 'src/peopleSync/panel.js']);
   // panel.js relies on shared.js from the document_start entry that also matches LinkedIn.
   assert.equal(entry.run_at, 'document_idle');
+});
+
+test('manifest reaches Google Chat inside the cross-origin Gmail iframes', () => {
+  const entry = manifest.content_scripts.find((item) => item.js.includes('src/chatAssist/panel.js'));
+  assert.deepEqual(entry.matches, ['https://chat.google.com/*', 'https://mail.google.com/chat/*']);
+  assert.equal(entry.all_frames, true);
+  // These frames do not get the top-frame document_start scripts, so the entry must be self-contained.
+  assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/panel.js']);
 });

@@ -16,6 +16,17 @@ Features:
 - Switch in the toolbar icon's popup; picking a mode also shows/hides its UI on the current tab (stored in `chrome.storage.local` as `a2gent.adapterChrome.mode`).
 - HearHear is ES modules, so run `npm install && npm run build` before loading the unpacked extension (outputs `dist/`, git-ignored).
 
+## Google Chat assistant
+
+A toolbar above each Google Chat composer, in Gmail and on chat.google.com, independent of the modes above. It is the option when the Chat API is not available: it needs no Workspace admin, Google Cloud project or OAuth.
+
+- 🔎 sends the conversation of that pane (a space or an open thread) to the selected agent, Аристотель by default.
+- 📝 sends the draft typed in the composer for review, in the same session.
+- Nothing leaves the page until a button is clicked. The extension never writes to the composer and never sends to Chat.
+- Only messages Chat has loaded are read, so scroll up first to include older ones. Attachments are not read.
+- Sessions are created with `skip_telegram_sync`, so conversations are not mirrored to a Telegram topic.
+- Message parsing expects the English Chat UI labels for reactions and reply counters.
+
 ## Setup
 
 1. Start Brute locally. The default HTTP API port is `5445`:
