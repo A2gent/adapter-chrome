@@ -16,6 +16,7 @@
   pause.setAttribute('aria-pressed', String(paused));
   reset.disabled = !host || !Object.keys(state.sites?.[host]?.verdicts || {}).length;
   document.getElementById('adblock-count').textContent = learned || '';
+  if (state.classifier?.backend) enabled.parentElement.title = [state.classifier.backend, state.classifier.model].filter(Boolean).join(' / ');
   if (state.enabled && state.error) document.getElementById('error').textContent = state.error;
 
   const apply = async (message) => {

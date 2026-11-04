@@ -31,11 +31,14 @@ A toolbar above each Google Chat composer, in Gmail and on chat.google.com, inde
 
 The 🛡️ row in the toolbar popup turns on a self-learning ad blocker. It is off by default and works in every mode.
 
-- The page is scanned for ad-looking blocks (iframes, `banner`/`ad`/`sponsor` names, pinned bars). Unknown ones go through the service worker to `POST /browser-extension/adblock/classify`, where Brute asks System One whether each is an ad.
+- Ad-network slots (Google Publisher Tag frames, `ins.adsbygoogle`, DoubleClick links) hide at once with no model call, and nothing about them leaves the browser.
+- The page is rescanned on DOM and attribute changes, on scroll and resize, and after load. A 5x5 grid over the viewport also finds what is painted on screen, such as pinned bars and image links to other sites, whatever their class names say.
+- Other ad-looking blocks go through the service worker to `POST /browser-extension/adblock/classify`, where Brute asks System One whether each is an ad; blocks on screen go first. Frames from the site itself and from captcha, video, map and payment services never reach the model.
+- The classifier is chosen in Caesar under Settings -> System One -> Ad blocker. `qwen/qwen3-vl-4b` in LM Studio keeps everything local and skips the daily request budget.
 - Verdicts are cached per site in `chrome.storage.local` (`a2gent.adapterChrome.adblock`), so repeat visits hide known ads with no classifier call. Confident third-party ad frames also become `declarativeNetRequest` rules scoped to that site.
-- Sent per block: site host, tag, id/classes, frame and link hosts (no paths or queries), size and position. Text is sent only when the block leads to another site. Classifier traffic goes to Jev unless System One uses LM Studio. Private hosts (`localhost`, `.local`, `.lan`, `.corp`, ...) are never scanned.
+- Sent per block: site host, tag, id/classes, frame and link hosts (no paths or queries), size and position. Text is sent only when the block leads to another site. Classifier traffic goes to Jev unless the ad blocker or System One uses LM Studio. Private hosts (`localhost`, `.local`, `.lan`, `.corp`, ...) are never scanned.
 - Page structure, forms, inputs, video and blocks over 70% of the viewport are never hidden, and the checks re-run on every page.
-- Spend is capped at 3 requests per page load, 30 per site and 300 in total per day; errors pause classification for 10 minutes.
+- Requests are capped at 10 per page load. Jev is also capped at 30 per site and 300 in total per day. Errors pause classification for 10 minutes.
 - ⏸️ pauses the current site; ↺ forgets what was learned there, which is the fix for a wrongly hidden block. Source: `src/adblock/`.
 
 ## Setup

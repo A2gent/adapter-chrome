@@ -121,3 +121,25 @@ test('a Brute failure is reported and kept for the popup', async () => {
   assert.deepEqual(await send({ type: 'A2GENT_ADBLOCK_CLASSIFY', host: 'other.ee', items: [item('#b')] }), { ok: false, skipped: true });
   assert.equal(calls, 1);
 });
+
+test('a local model is not limited by the daily Jev budget but still respects pause and cooldown', () => {
+  const now = Date.parse('2026-11-04T10:00:00Z');
+  const state = { ...emptyState(), enabled: true, classifier: { backend: 'lmstudio', model: 'qwen/qwen3-vl-4b' } };
+  state.budget = { day: '2026-11-04', total: 9999, hosts: { 'a.ee': 9999 } };
+  assert.equal(reserveRequest(state, 'a.ee', now), true);
+  assert.equal(reserveRequest({ ...state, paused: { 'a.ee': true } }, 'a.ee', now), false);
+  assert.equal(reserveRequest({ ...state, cooldownUntil: now + 1 }, 'a.ee', now), false);
+  assert.equal(reserveRequest({ ...state, classifier: { backend: 'jev', model: '' } }, 'a.ee', now), false);
+});
+
+test('switching to a local model lifts a spent Jev budget without waiting for the next day', async () => {
+  const { send, store } = harness(async ({ path }) => ({
+    ok: true,
+    response: { ok: true, status: 200, body: path.endsWith('/config') ? { backend: 'lmstudio', model: 'qwen/qwen3-vl-4b' } : { verdicts: [] } },
+  }));
+  await send({ type: 'A2GENT_ADBLOCK_SET_ENABLED', enabled: true });
+  store[STORAGE_KEY].budget = { day: new Date().toISOString().slice(0, 10), total: 9999, hosts: {} };
+  const result = await send({ type: 'A2GENT_ADBLOCK_CLASSIFY', host: 'news.ee', items: [item('#a')] });
+  assert.equal(result.ok, true);
+  assert.equal(store[STORAGE_KEY].classifier.backend, 'lmstudio');
+});

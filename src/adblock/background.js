@@ -7,6 +7,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, () => {
   const STORAGE_KEY = 'a2gent.adapterChrome.adblock';
   const CLASSIFY_PATH = '/browser-extension/adblock/classify';
+  const CONFIG_PATH = '/browser-extension/adblock/config';
   const HIDE_CONFIDENCE = 0.8;
   const NETWORK_BLOCK_CONFIDENCE = 0.9;
   const MAX_SITES = 200;
@@ -15,8 +16,10 @@
   const DAILY_REQUEST_LIMIT = 300;
   const DAILY_REQUEST_LIMIT_PER_HOST = 30;
   const ERROR_COOLDOWN_MS = 10 * 60 * 1000;
+  const LOCAL_ERROR_COOLDOWN_MS = 60 * 1000;
+  const LOCAL_BACKEND = 'lmstudio';
 
-  const emptyState = () => ({ enabled: false, paused: {}, sites: {}, error: '', cooldownUntil: 0, budget: { day: '', total: 0, hosts: {} } });
+  const emptyState = () => ({ enabled: false, paused: {}, sites: {}, error: '', cooldownUntil: 0, classifier: { backend: '', model: '' }, budget: { day: '', total: 0, hosts: {} } });
   const emptySite = () => ({ verdicts: {}, domains: [], updatedAt: 0 });
 
   const registrableSuffix = (host) => host.split('.').slice(-2).join('.');
@@ -52,6 +55,8 @@
   // Atomic check-and-count, so parallel tabs cannot overrun the budget or send data while off.
   const reserveRequest = (state, host, now) => {
     if (!state.enabled || state.paused[host] || now < state.cooldownUntil) return false;
+    // The daily budget protects paid Jev quota; a local model costs nothing and sends nothing out.
+    if (state.classifier.backend === LOCAL_BACKEND) return true;
     const day = new Date(now).toISOString().slice(0, 10);
     if (state.budget.day !== day) state.budget = { day, total: 0, hosts: {} };
     const hostCount = state.budget.hosts[host] || 0;
@@ -109,7 +114,15 @@
     };
 
     const classify = async ({ host, items }) => {
-      if (!await updateState((state) => reserveRequest(state, host, Date.now()))) return { ok: false, skipped: true };
+      if (Date.now() < (await readState()).cooldownUntil) return { ok: false, skipped: true };
+      // WHY: asked before the budget check, so switching to a local model lifts a spent Jev budget at once.
+      const { response: config } = await fetchBruteJson({ path: CONFIG_PATH });
+      if (!config.ok) throw new Error(config.body?.error || config.bodyText || `Brute HTTP ${config.status}`);
+      const allowed = await updateState((state) => {
+        state.classifier = { backend: config.body?.backend || '', model: config.body?.model || '' };
+        return reserveRequest(state, host, Date.now());
+      });
+      if (!allowed) return { ok: false, skipped: true };
       const { response } = await fetchBruteJson({
         path: CLASSIFY_PATH,
         options: { method: 'POST', body: JSON.stringify({ host, items }) },
@@ -127,7 +140,7 @@
         const detail = errorMessage(error);
         await updateState((state) => {
           state.error = detail;
-          state.cooldownUntil = Date.now() + ERROR_COOLDOWN_MS;
+          state.cooldownUntil = Date.now() + (state.classifier.backend === LOCAL_BACKEND ? LOCAL_ERROR_COOLDOWN_MS : ERROR_COOLDOWN_MS);
         });
         return { ok: false, error: detail };
       }),
