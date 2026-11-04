@@ -122,6 +122,40 @@ test('a Brute failure is reported and kept for the popup', async () => {
   assert.equal(calls, 1);
 });
 
+const brute = (status, body) => async () => ({ ok: true, response: { ok: status < 400, status, body, bodyText: status === 404 ? '404 page not found\n' : '' } });
+
+test('an old Brute without the adblock routes gets an actionable error', async () => {
+  const { send, store } = harness(brute(404));
+  await send({ type: 'A2GENT_ADBLOCK_SET_ENABLED', enabled: true });
+  const expected = { ok: false, error: 'Brute is outdated: rebuild and restart it' };
+  assert.deepEqual(await send({ type: 'A2GENT_ADBLOCK_CHECK' }), expected);
+  assert.equal(store[STORAGE_KEY].error, expected.error);
+});
+
+test('a stopped Brute is named instead of the raw fetch failure', async () => {
+  const { send } = harness(async () => { throw new TypeError('Failed to fetch'); });
+  await send({ type: 'A2GENT_ADBLOCK_SET_ENABLED', enabled: true });
+  assert.deepEqual(await send({ type: 'A2GENT_ADBLOCK_CHECK' }), { ok: false, error: 'Brute is not running' });
+});
+
+test('opening the popup clears a connection error once Brute is back', async () => {
+  const { send, store } = harness(brute(200, { backend: 'lmstudio', model: 'qwen/qwen3-vl-4b' }));
+  await send({ type: 'A2GENT_ADBLOCK_SET_ENABLED', enabled: true });
+  Object.assign(store[STORAGE_KEY], { error: '404 page not found', cooldownUntil: Date.now() + 60000 });
+  assert.deepEqual(await send({ type: 'A2GENT_ADBLOCK_CHECK' }), { ok: true, error: '' });
+  assert.equal(store[STORAGE_KEY].cooldownUntil, 0);
+  assert.equal(store[STORAGE_KEY].classifier.backend, 'lmstudio');
+});
+
+test('opening the popup keeps a classifier error that a reachable Brute does not disprove', async () => {
+  const { send, store } = harness(async ({ path }) => brute(path.endsWith('/config') ? 200 : 503, { error: 'System One is not configured' })());
+  await send({ type: 'A2GENT_ADBLOCK_SET_ENABLED', enabled: true });
+  await send({ type: 'A2GENT_ADBLOCK_CLASSIFY', host: 'news.ee', items: [item('#a')] });
+  const { cooldownUntil } = store[STORAGE_KEY];
+  assert.deepEqual(await send({ type: 'A2GENT_ADBLOCK_CHECK' }), { ok: true, error: 'System One is not configured' });
+  assert.equal(store[STORAGE_KEY].cooldownUntil, cooldownUntil);
+});
+
 test('a local model is not limited by the daily Jev budget but still respects pause and cooldown', () => {
   const now = Date.parse('2026-11-04T10:00:00Z');
   const state = { ...emptyState(), enabled: true, classifier: { backend: 'lmstudio', model: 'qwen/qwen3-vl-4b' } };

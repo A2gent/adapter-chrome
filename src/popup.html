@@ -13,7 +13,9 @@
   .adblock label { display: flex; align-items: center; gap: 4px; flex: 1; cursor: pointer; }
   .adblock button { flex-direction: row; width: auto; padding: 2px 6px; }
   .adblock button span { font-size: 14px; }
-  .adblock button:disabled { opacity: 0.4; cursor: default; }
+  .adblock #adblock-site-row { flex: none; }
+  .adblock [hidden] { display: none; }
+  #adblock-host { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 <div class="modes">
   <button data-mode="audio" title="Audio: read articles aloud (HearHear)"><span>🎧</span>Audio</button>
@@ -23,8 +25,8 @@
 </div>
 <div class="adblock">
   <label title="Hide ads recognized by System One. Ad-like page blocks are sent to the classifier."><input type="checkbox" id="adblock">🛡️ Adblock</label>
-  <button id="adblock-pause" title="Pause on this site"><span>⏸️</span></button>
-  <button id="adblock-reset" title="Forget ads learned on this site"><span>↺</span><b id="adblock-count"></b></button>
+  <label id="adblock-site-row" title="Adblock on this site" hidden><input type="checkbox" id="adblock-site"><span id="adblock-host"></span></label>
+  <button id="adblock-reset" title="Forget ads learned on this site" hidden><span>🧹</span><b id="adblock-count"></b></button>
 </div>
 <div id="error" style="color:#e5484d;font-size:12px;max-width:260px"></div>
 <script src="popup.js"></script>

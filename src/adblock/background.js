@@ -18,8 +18,10 @@
   const ERROR_COOLDOWN_MS = 10 * 60 * 1000;
   const LOCAL_ERROR_COOLDOWN_MS = 60 * 1000;
   const LOCAL_BACKEND = 'lmstudio';
+  const OUTDATED_BRUTE_ERROR = 'Brute is outdated: rebuild and restart it';
+  const BRUTE_UNREACHABLE_ERROR = 'Brute is not running';
 
-  const emptyState = () => ({ enabled: false, paused: {}, sites: {}, error: '', cooldownUntil: 0, classifier: { backend: '', model: '' }, budget: { day: '', total: 0, hosts: {} } });
+  const emptyState = () => ({ enabled: false, paused: {}, sites: {}, error: '', classifyFailed: false, cooldownUntil: 0, classifier: { backend: '', model: '' }, budget: { day: '', total: 0, hosts: {} } });
   const emptySite = () => ({ verdicts: {}, domains: [], updatedAt: 0 });
 
   const registrableSuffix = (host) => host.split('.').slice(-2).join('.');
@@ -89,6 +91,12 @@
       });
   };
 
+  // Both adblock routes exist in every current Brute, so a 404 can only mean an older build.
+  const failureText = ({ status, body, bodyText }) => {
+    if (status === 404) return OUTDATED_BRUTE_ERROR;
+    return body?.error || bodyText || `Brute HTTP ${status}`;
+  };
+
   const install = ({ chrome, fetchBruteJson, errorMessage }) => {
     const readState = async () => ({ ...emptyState(), ...(await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] });
 
@@ -113,13 +121,20 @@
       return run;
     };
 
+    const fetchClassifier = async () => {
+      const { response } = await fetchBruteJson({ path: CONFIG_PATH }).catch(() => {
+        throw new Error(BRUTE_UNREACHABLE_ERROR);
+      });
+      if (!response.ok) throw new Error(failureText(response));
+      return { backend: response.body?.backend || '', model: response.body?.model || '' };
+    };
+
     const classify = async ({ host, items }) => {
       if (Date.now() < (await readState()).cooldownUntil) return { ok: false, skipped: true };
       // WHY: asked before the budget check, so switching to a local model lifts a spent Jev budget at once.
-      const { response: config } = await fetchBruteJson({ path: CONFIG_PATH });
-      if (!config.ok) throw new Error(config.body?.error || config.bodyText || `Brute HTTP ${config.status}`);
+      const classifier = await fetchClassifier();
       const allowed = await updateState((state) => {
-        state.classifier = { backend: config.body?.backend || '', model: config.body?.model || '' };
+        state.classifier = classifier;
         return reserveRequest(state, host, Date.now());
       });
       if (!allowed) return { ok: false, skipped: true };
@@ -127,26 +142,47 @@
         path: CLASSIFY_PATH,
         options: { method: 'POST', body: JSON.stringify({ host, items }) },
       });
-      if (!response.ok) throw new Error(response.body?.error || response.bodyText || `Brute HTTP ${response.status}`);
+      if (!response.ok) throw Object.assign(new Error(failureText(response)), { classifyFailed: true });
       const verdicts = await updateState((state) => {
         state.error = '';
+        state.classifyFailed = false;
         return applyVerdicts(state, host, items, response.body?.verdicts || [], Date.now());
       });
       return { ok: true, verdicts };
     };
 
+    // WHY: a reachable Brute proves connection errors are over, so the popup never shows a stale
+    // one after a restart. It says nothing about the classifier, so those errors stay until a retry.
+    const check = async () => {
+      const classifier = await fetchClassifier();
+      const error = await updateState((state) => {
+        state.classifier = classifier;
+        if (!state.classifyFailed) {
+          state.error = '';
+          state.cooldownUntil = 0;
+        }
+        return state.error;
+      });
+      return { ok: true, error };
+    };
+
+    const reportFailure = async (error) => {
+      const detail = errorMessage(error);
+      await updateState((state) => {
+        state.error = detail;
+        state.classifyFailed = Boolean(error.classifyFailed);
+        state.cooldownUntil = Date.now() + (state.classifier.backend === LOCAL_BACKEND ? LOCAL_ERROR_COOLDOWN_MS : ERROR_COOLDOWN_MS);
+      });
+      return { ok: false, error: detail };
+    };
+
     const handlers = {
-      A2GENT_ADBLOCK_CLASSIFY: (message) => classify(message).catch(async (error) => {
-        const detail = errorMessage(error);
-        await updateState((state) => {
-          state.error = detail;
-          state.cooldownUntil = Date.now() + (state.classifier.backend === LOCAL_BACKEND ? LOCAL_ERROR_COOLDOWN_MS : ERROR_COOLDOWN_MS);
-        });
-        return { ok: false, error: detail };
-      }),
+      A2GENT_ADBLOCK_CLASSIFY: (message) => classify(message).catch(reportFailure),
+      A2GENT_ADBLOCK_CHECK: () => check().catch(reportFailure),
       A2GENT_ADBLOCK_SET_ENABLED: (message) => updateState((state) => {
         state.enabled = Boolean(message.enabled);
         state.error = '';
+        state.classifyFailed = false;
         state.cooldownUntil = 0;
       }).then(() => ({ ok: true })),
       A2GENT_ADBLOCK_SET_PAUSED: (message) => updateState((state) => {
