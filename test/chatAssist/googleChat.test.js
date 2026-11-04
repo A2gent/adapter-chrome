@@ -64,3 +64,42 @@ test('prompts fence chat content with a fence a message cannot predict', () => {
   assert.doesNotMatch(googleChat.draftPrompt('my reply'), /Переписка:/);
   assert.match(googleChat.draftPrompt('my reply', 'thread', 'F2'), /Переписка:\nF2\nthread\nF2[\s\S]*Черновик:\nF2\nmy reply\nF2/);
 });
+
+test('parseMessages keeps attachments and skips avatars and images that have not loaded', () => {
+  const document = pane(['Ann\n,\n9:00 AM\n,\nLook']);
+  const group = document.querySelector('#list [role="group"]');
+  const add = (src, rendered, natural) => {
+    const image = document.createElement('img');
+    image.src = src;
+    image.getBoundingClientRect = () => ({ width: rendered, height: rendered });
+    Object.defineProperties(image, { naturalWidth: { value: natural }, naturalHeight: { value: natural } });
+    group.append(image);
+  };
+  add('https://chat.google.com/attachment', 300, 900);
+  add('https://lh3.googleusercontent.com/avatar', 36, 96);
+  add('https://chat.google.com/pending', 300, 0);
+
+  assert.deepEqual(googleChat.parseMessages(document.getElementById('pane'))[0].images, ['https://chat.google.com/attachment']);
+});
+
+test('the newest images are kept and each transcript mark points at its attachment', () => {
+  const images = Array.from({ length: 10 }, (_, index) => `https://x/${index}`);
+  const messages = [
+    { sender: 'Ann', time: '9:00', body: 'old', images: images.slice(0, 2) },
+    { sender: 'Bob', time: '9:01', body: '', images: [...images.slice(2), images[2]] },
+  ];
+  const sources = googleChat.selectImages(messages);
+
+  assert.deepEqual(sources, images.slice(2));
+  const transcript = googleChat.transcriptText(messages, sources);
+  assert.match(transcript, /Ann \(9:00\):\nold\n\[image not sent\]\n\[image not sent\]/);
+  assert.match(transcript, /Bob \(9:01\):\n\[image 1\]\n\[image 2\]/);
+});
+
+test('a message cannot fake an image reference', () => {
+  assert.match(googleChat.transcriptText([{ sender: 'Ann', time: '9:00', body: 'see [image 1] and [IMAGE 2]' }]), /see \(image 1\] and \(IMAGE 2\]/);
+});
+
+test('imageNote is empty without images', () => {
+  assert.equal(googleChat.imageNote([]), '');
+});

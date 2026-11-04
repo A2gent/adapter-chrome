@@ -42,6 +42,7 @@ test('manifest content scripts reference bundled files in load order', () => {
     'src/peopleSync/linkedin.js',
     'src/peopleSync/panel.js',
     'src/chatAssist/googleChat.js',
+    'src/chatAssist/chatImage.js',
     'src/chatAssist/markdown.js',
     'src/chatAssist/panel.js',
   ]);
@@ -90,10 +91,17 @@ test('manifest loads LinkedIn sync scripts only on LinkedIn, after the shared he
   assert.equal(entry.run_at, 'document_idle');
 });
 
+test('the extension CSP lets the service worker reach every Chat image host', () => {
+  const connectSrc = manifest.content_security_policy.extension_pages.match(/connect-src ([^;]*)/)[1].split(/\s+/);
+  const imageHosts = manifest.host_permissions.filter((host) => /google/.test(host)).map((host) => host.replace(/\/\*$/, ''));
+  assert.equal(imageHosts.length, 4);
+  for (const host of imageHosts) assert.ok(connectSrc.includes(host), host);
+});
+
 test('manifest reaches Google Chat inside the cross-origin Gmail iframes', () => {
   const entry = manifest.content_scripts.find((item) => item.js.includes('src/chatAssist/panel.js'));
   assert.deepEqual(entry.matches, ['https://chat.google.com/*', 'https://mail.google.com/chat/*']);
   assert.equal(entry.all_frames, true);
   // These frames do not get the top-frame document_start scripts, so the entry must be self-contained.
-  assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/markdown.js', 'src/chatAssist/panel.js']);
+  assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/chatImage.js', 'src/chatAssist/markdown.js', 'src/chatAssist/panel.js']);
 });

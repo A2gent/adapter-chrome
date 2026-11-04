@@ -1,5 +1,5 @@
 // HearHear (audio mode) is bundled by `npm run build`; it registers its own message listeners.
-if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js', 'adblock/background.js');
+if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js', 'adblock/background.js', 'chatAssist/chatImage.js');
 
 const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
 const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';
@@ -523,6 +523,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // WHAT: proxy JSON Brute API calls through the extension service worker.
     void fetchBruteJson(message)
       .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+    return true;
+  }
+
+  if (message.type === 'A2GENT_FETCH_CHAT_IMAGE') {
+    // WHY: the service worker fetches with the user's Google cookies, so only Chat pages may ask.
+    // origin, not url: an about:blank frame inside Chat reports no useful url.
+    const chatImage = globalThis.__A2GENT_CHAT_ASSIST_IMAGE__;
+    if (!chatImage.isChatPage(sender?.origin)) {
+      sendResponse({ ok: false, error: 'Chat images can only be requested from a Chat page.' });
+      return false;
+    }
+    void chatImage.fetchChatImage(message.url)
+      .then((image) => sendResponse({ ok: true, image }))
       .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
     return true;
   }

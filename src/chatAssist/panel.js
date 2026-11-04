@@ -4,7 +4,8 @@
 (() => {
   const googleChat = globalThis.__A2GENT_CHAT_ASSIST_GOOGLE_CHAT__;
   const renderMarkdown = globalThis.__A2GENT_CHAT_ASSIST_MARKDOWN__;
-  if (!googleChat || !renderMarkdown || globalThis.__A2GENT_CHAT_ASSIST_PANEL__) return;
+  const chatImage = globalThis.__A2GENT_CHAT_ASSIST_IMAGE__;
+  if (!googleChat || !renderMarkdown || !chatImage || globalThis.__A2GENT_CHAT_ASSIST_PANEL__) return;
   globalThis.__A2GENT_CHAT_ASSIST_PANEL__ = true;
 
   const AGENT_KEY = 'a2gent.adapterChrome.chatAgent';
@@ -20,7 +21,7 @@
 *{box-sizing:border-box;font-family:inherit}.bar{display:flex;gap:4px;align-items:center;padding:2px 8px}
 select{font-size:12px;max-width:150px;padding:2px 4px;border:1px solid #c9d1dc;border-radius:5px;background:#fff;color:inherit}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
-a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out{margin:2px 8px 4px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
+a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.bar span{font-size:12px}.out{margin:2px 8px 4px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
 .out.err{color:#b42318}.out:empty{display:none}
 .md{white-space:normal;overflow-wrap:break-word}.md a:hover{text-decoration:underline}
 .md p,.md ul,.md ol,.md pre,.md blockquote,.md table{margin:0 0 6px}.md>:last-child{margin-bottom:0}.md>:first-child{margin-top:0}
@@ -46,7 +47,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
   const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
-  const startSession = async (task) => {
+  const startSession = async (task, images) => {
     const agent = agents.find((candidate) => candidate.id === agentId) || DEFAULT_AGENT;
     const session = await post('/sessions', {
       agent_id: 'build',
@@ -54,6 +55,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
       queued: true,
       queue_mode: 'serial',
       task,
+      images,
       metadata: {
         source: 'google_chat',
         launch_target: 'agent',
@@ -66,6 +68,14 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
     // Start skips the project-wide serial queue. It only fails when the queue already picked the session up.
     await post(`/sessions/${encodeURIComponent(session.id)}/start`, {}).catch(() => {});
     return session.id;
+  };
+
+  const loadImage = async (src) => {
+    // blob: URLs only exist inside this page, so the service worker cannot fetch them.
+    if (/^(blob|data):/.test(src)) return chatImage.encodeImage(await (await fetch(src)).blob());
+    const reply = await chrome.runtime.sendMessage({ type: 'A2GENT_FETCH_CHAT_IMAGE', url: src });
+    if (!reply?.ok) throw new Error(reply?.error || 'Image download failed.');
+    return reply.image;
   };
 
   const assistantReplies = (session) => (session?.messages || []).filter((message) => message.role === 'assistant' && message.content?.trim());
@@ -92,7 +102,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
   };
 
   const render = (widget) => {
-    const { busy, error, reply, sessionId } = widget;
+    const { busy, error, reply, sessionId, imageStatus, imageError } = widget;
     const select = el('select', { title: 'Agent', disabled: busy, onchange: () => {
       agentId = select.value;
       chrome.storage.local.set({ [AGENT_KEY]: agentId });
@@ -103,6 +113,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
       button('🔎', 'Analyze this conversation', () => analyze(widget)),
       button('📝', 'Review the draft typed in the reply box', () => reviewDraft(widget)),
       busy ? el('span', { textContent: '…' }) : null,
+      imageStatus ? el('span', { textContent: imageStatus, title: imageError || 'Images sent to the agent' }) : null,
       reply || error ? button('×', 'Hide the result', () => { widget.reply = ''; widget.error = ''; render(widget); }) : null,
       sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null);
     widget.shadow.replaceChildren(el('style', { textContent: STYLE }), bar,
@@ -111,24 +122,37 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
 
   const ask = async (widget, buildPrompt) => {
     if (widget.busy) return;
-    Object.assign(widget, { busy: true, error: '', reply: '' });
+    Object.assign(widget, { busy: true, error: '', reply: '', imageStatus: '', imageError: '' });
     render(widget);
     try {
       // Messages may have loaded after the toolbar appeared, so resolve the pane at click time.
       Object.assign(widget, googleChat.conversationFor(widget.textbox));
-      const transcript = googleChat.transcriptText(googleChat.parseMessages(widget.pane));
+      const messages = googleChat.parseMessages(widget.pane);
+      const sources = googleChat.selectImages(messages);
+      const transcript = googleChat.transcriptText(messages, sources);
       if (!transcript) throw new Error('No messages found in this conversation.');
       // Chat can reuse one composer for another conversation; a session must not mix conversations or agents.
       const key = `${agentId}|${transcript.slice(0, CONVERSATION_KEY_LENGTH)}`;
-      if (widget.key !== key) Object.assign(widget, { key, sessionId: '', transcript: '' });
+      if (widget.key !== key) Object.assign(widget, { key, sessionId: '', transcript: '', sources: [] });
       // Brute only delivers queued messages to completed sessions; anything else needs a fresh session.
       const session = widget.sessionId ? await api(`/sessions/${encodeURIComponent(widget.sessionId)}`) : null;
       const reusable = session?.status === 'completed';
       const known = reusable ? assistantReplies(session).length : 0;
-      const prompt = buildPrompt(transcript, reusable ? widget.transcript : '');
-      if (reusable) await post(`/sessions/${encodeURIComponent(widget.sessionId)}/queue`, { message: prompt });
-      else widget.sessionId = await startSession(prompt);
-      widget.transcript = transcript;
+      // Equal text with other images is a change too, and only a repeated transcript carries images.
+      const sameImages = sources.join() === widget.sources.join();
+      const request = buildPrompt(transcript, reusable && sameImages ? widget.transcript : '');
+      // A draft review that does not repeat the conversation has already sent its images.
+      const results = request.includes(transcript) ? await Promise.allSettled(sources.map(loadImage)) : [];
+      const loaded = results.map((result) => result.value);
+      const images = loaded.filter(Boolean);
+      const prompt = [request, googleChat.imageNote(loaded)].filter(Boolean).join('\n\n');
+      if (results.length) {
+        widget.imageStatus = `🖼 ${images.length}/${googleChat.distinctImages(messages).length}`;
+        widget.imageError = results.find((result) => result.reason)?.reason.message || '';
+      }
+      if (reusable) await post(`/sessions/${encodeURIComponent(widget.sessionId)}/queue`, { message: prompt, images });
+      else widget.sessionId = await startSession(prompt, images);
+      Object.assign(widget, { transcript, sources });
       render(widget);
       const replies = await waitForReplies(widget.sessionId, known);
       widget.reply = replies[replies.length - 1].content.trim();
@@ -169,7 +193,7 @@ a{color:#1a5fb4;text-decoration:none}.bar a{margin-left:auto;font-size:12px}.out
       host.setAttribute(HOST_ATTR, '');
       // Chat has global keyboard shortcuts; keep our controls away from them.
       for (const type of ['click', 'mousedown', 'keydown', 'keyup']) host.addEventListener(type, (event) => event.stopPropagation());
-      const widget = { host, shadow: host.attachShadow({ mode: 'closed' }), textbox, ...conversation, key: '', sessionId: '', transcript: '', busy: false, error: '', reply: '' };
+      const widget = { host, shadow: host.attachShadow({ mode: 'closed' }), textbox, ...conversation, key: '', sessionId: '', transcript: '', sources: [], busy: false, error: '', reply: '', imageStatus: '', imageError: '' };
       widgets.set(textbox, widget);
       render(widget);
     }

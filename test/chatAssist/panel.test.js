@@ -18,7 +18,8 @@ const setup = (t, handlers) => {
   const calls = [];
   window.chrome = {
     runtime: {
-      sendMessage: async ({ path: url, options }) => {
+      sendMessage: async ({ type, url: imageUrl, path: url, options }) => {
+        if (type === 'A2GENT_FETCH_CHAT_IMAGE') return handlers.image(imageUrl);
         const key = `${options?.method || 'GET'} ${url}`;
         const body = options?.body && JSON.parse(options.body);
         calls.push({ key, body });
@@ -31,6 +32,7 @@ const setup = (t, handlers) => {
   const attach = window.Element.prototype.attachShadow;
   window.Element.prototype.attachShadow = function attachShadow(init) { const root = attach.call(this, { ...init, mode: 'open' }); shadows.push(root); return root; };
   window.eval(source('googleChat.js'));
+  window.eval(source('chatImage.js'));
   window.eval(source('markdown.js'));
   window.eval(source('panel.js'));
   const find = (selector) => shadows[0].querySelector(selector);
@@ -64,6 +66,59 @@ test('analyze starts an agent session that stays out of Telegram and shows the r
   assert.ok(calls.some((call) => call.key === 'POST /sessions/s1/start'));
   assert.equal(find('.out').textContent, 'Суть спора: релиз');
   assert.equal(document.getElementById('box').textContent, '');
+});
+
+const addImage = (window, document, src) => {
+  const image = document.createElement('img');
+  image.src = src;
+  image.getBoundingClientRect = () => ({ width: 300, height: 200 });
+  Object.defineProperties(image, { naturalWidth: { value: 900 }, naturalHeight: { value: 600 } });
+  document.getElementById('msg').append(image);
+};
+
+test('analyze attaches thread images and tells the agent which ones failed', async (t) => {
+  const context = setup(t, {
+    'POST /sessions': () => ({ id: 's1' }),
+    'POST /sessions/s1/start': () => ({}),
+    'GET /sessions/s1': completed('ok'),
+    image: (url) => (url.endsWith('/good') ? { ok: true, image: { media_type: 'image/jpeg', data_base64: 'Zm9v' } } : { ok: false, error: 'HTTP 403' }),
+  });
+  addImage(context.window, context.document, 'https://chat.google.com/bad');
+  addImage(context.window, context.document, 'https://chat.google.com/good');
+  await settle();
+  context.buttons()[0].click();
+  await settle();
+
+  const created = context.calls.find((call) => call.key === 'POST /sessions').body;
+  assert.deepEqual(created.images, [{ media_type: 'image/jpeg', data_base64: 'Zm9v' }]);
+  assert.match(created.task, /Can we ship\?\n\[image 1\]\n\[image 2\]/);
+  assert.match(created.task, /по порядку: \[image 2\]/);
+  assert.match(created.task, /Не удалось загрузить: \[image 1\]/);
+  assert.equal(context.find('.bar span').textContent, '🖼 1/2');
+  assert.equal(context.find('.bar span').title, 'HTTP 403');
+});
+
+test('draft review does not resend images the session already has', async (t) => {
+  let replies = ['analysis'];
+  let downloads = 0;
+  const context = setup(t, {
+    'POST /sessions': () => ({ id: 's1' }),
+    'GET /sessions/s1': () => completed(...replies)(),
+    'POST /sessions/s1/queue': () => { replies = ['analysis', 'draft review']; return {}; },
+    image: () => { downloads += 1; return { ok: true, image: { media_type: 'image/jpeg', data_base64: 'Zm9v' } }; },
+  });
+  addImage(context.window, context.document, 'https://chat.google.com/good');
+  await settle();
+  context.buttons()[0].click();
+  await settle();
+  context.document.getElementById('box').innerText = 'Yes';
+  context.buttons()[1].click();
+  await settle();
+
+  const { body } = context.calls.find((call) => call.key === 'POST /sessions/s1/queue');
+  assert.deepEqual(body.images, []);
+  assert.doesNotMatch(body.message, /картинки/);
+  assert.equal(downloads, 1);
 });
 
 test('the reply renders as markdown while errors stay plain text', async (t) => {
