@@ -395,6 +395,26 @@ test('link cards inside X posts never reach the model or a learned selector', ()
   assert.equal(doc.getElementById('card').style.display, '');
 });
 
+test('Facebook feed and sidebar ads hide in any language, real posts and friend requests stay', () => {
+  const { doc, win } = page(`
+    <div role="feed">
+      <div id="ad-feed" data-pagelet="FeedUnit_1"><div role="article"><a href="/ads/about/?x=1">Реклама</a><a href="https://shop.ee/x">Buy</a></div></div>
+      <div id="ad-en" data-pagelet="FeedUnit_2"><div role="article"><a href="/ads/about/">Sponsored</a></div></div>
+      <div id="post" data-pagelet="FeedUnit_3"><div role="article"><a href="/someone/posts/1">Hi</a></div></div>
+    </div>
+    <div><div id="ad-side"><h3>Реклама</h3><a href="https://l.facebook.com/l.php?u=x">Buy 2</a></div>
+      <div id="friends"><h3>Запросы на добавление в друзья</h3><a href="/people/ivan">Ivan</a></div></div>`, 'https://www.facebook.com/');
+  hideCertainAds(doc, win);
+  for (const id of ['ad-feed', 'ad-en', 'ad-side']) assert.equal(doc.getElementById(id).style.display, 'none', id);
+  for (const id of ['post', 'friends']) assert.equal(doc.getElementById(id).style.display, '', id);
+});
+
+test('the Facebook ad rules do not run on other sites', () => {
+  const { doc, win } = page('<div id="feed"><div id="ad" data-pagelet="FeedUnit_1"><div role="article"><a href="/ads/about/">Sponsored</a></div></div></div>', 'https://news.ee/');
+  hideCertainAds(doc, win);
+  assert.equal(doc.getElementById('ad').style.display, '');
+});
+
 test('private hosts are skipped so intranet content is never sent out', () => {
   for (const host of ['localhost', 'localhost.', '127.0.0.1', 'nas.local', 'router', 'git.internal', 'nas.lan', 'app.corp', 'box.home.arpa', 'dev.test', 'foo.localhost', 'pc.tail1.ts.net']) assert.equal(isPrivateHost(host), true, host);
   assert.equal(isPrivateHost('rus.postimees.ee'), false);

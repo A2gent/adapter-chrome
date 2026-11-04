@@ -33,6 +33,7 @@ The 🛡️ row in the toolbar popup turns on a self-learning ad blocker. It is 
 
 - Ad-network slots (Google Publisher Tag frames, `ins.adsbygoogle`, DoubleClick links) hide at once with no model call, and nothing about them leaves the browser.
 - On X promoted posts hide at once with no model call, in any UI language: they are the only posts without a timestamp. Content inside X posts never reaches the model.
+- On Facebook, feed posts that link to `/ads/about` and the sidebar block under the "Реклама"/"Sponsored" heading hide at once with no model call. Friend requests and other sidebar blocks stay.
 - The page is rescanned on DOM and attribute changes, on scroll and resize, and after load. A 5x5 grid over the viewport also finds what is painted on screen, such as pinned bars and image links to other sites, whatever their class names say.
 - Other ad-looking blocks go through the service worker to `POST /browser-extension/adblock/classify`, where Brute asks System One whether each is an ad; blocks on screen go first. Frames from the site itself and from captcha, video, map and payment services never reach the model.
 - The classifier is chosen in Caesar under Settings -> System One -> Ad blocker. `qwen/qwen3-vl-4b` in LM Studio keeps everything local and skips the daily request budget.

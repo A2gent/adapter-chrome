@@ -235,6 +235,29 @@
     }
   };
 
+  // WHY: Facebook's ad label is translated and its classes are obfuscated, but every ad links to
+  // its ad-info page, and the sidebar ad block sits right under a "Реклама"/"Sponsored" heading.
+  const FACEBOOK_HOST = /(?:^|\.)facebook\.com$/;
+  const FACEBOOK_AD_LINK = 'a[href*="/ads/about"]';
+  const FACEBOOK_FEED_UNIT = '[data-pagelet^="FeedUnit_"]';
+  const FACEBOOK_SIDEBAR_LABEL = /^(?:Реклама|Sponsored)$/;
+  const FACEBOOK_REDIRECT_LINK = 'a[href*="l.facebook.com/l.php"]';
+  const SIDEBAR_CLIMB = 12;
+
+  const hideFacebookAds = (doc) => {
+    if (!FACEBOOK_HOST.test(doc.location.hostname)) return;
+    for (const link of doc.querySelectorAll(FACEBOOK_AD_LINK)) {
+      const unit = link.closest(FACEBOOK_FEED_UNIT) || link.closest('[role="article"]');
+      if (unit && !unit.querySelector('[role="feed"]')) hide(unit);
+    }
+    for (const heading of doc.querySelectorAll('h3')) {
+      if (!FACEBOOK_SIDEBAR_LABEL.test(heading.textContent.trim())) continue;
+      let block = heading;
+      for (let depth = 0; block && depth < SIDEBAR_CLIMB && !block.querySelector(FACEBOOK_REDIRECT_LINK); depth += 1) block = block.parentElement;
+      if (block?.querySelector(FACEBOOK_REDIRECT_LINK) && !block.querySelector('[role="feed"], form, input')) hide(block);
+    }
+  };
+
   const certainHides = new Map();
 
   const isCertainAd = (element, win) => {
@@ -251,6 +274,7 @@
   // Size limits stay off for the slot itself: a full-screen interstitial is exactly what must go.
   const hideCertainAds = (doc, win) => {
     hidePromotedPosts(doc);
+    hideFacebookAds(doc);
     const parsing = doc.readyState === 'loading';
     for (const element of doc.querySelectorAll(CERTAIN_AD_SELECTOR)) {
       if (certainHides.has(element) || element.closest(PROTECTED_ANCESTORS) || !isCertainAd(element, win)) continue;
