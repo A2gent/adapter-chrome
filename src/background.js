@@ -1,5 +1,5 @@
 // HearHear (audio mode) is bundled by `npm run build`; it registers its own message listeners.
-if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js', 'adblock/background.js', 'chatAssist/chatImage.js');
+if (typeof importScripts === 'function') importScripts('../dist/hearhear-background.js', 'adblock/background.js', 'chatAssist/chatImage.js', 'summarize/background.js');
 
 const DEFAULT_BRUTE_BASE_URL = 'http://localhost:5445';
 const DEFAULT_CAESAR_BASE_URL = 'https://my.a2gent.net';

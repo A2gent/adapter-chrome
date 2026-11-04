@@ -25,7 +25,8 @@
     "storage",
     "offscreen",
     "debugger",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "contextMenus"
   ],
   "host_permissions": [
     "http://localhost/*",
@@ -101,6 +102,17 @@
         "src/adblock/content.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "src/chatAssist/markdown.js",
+        "src/summarize/panel.js"
+      ],
+      "run_at": "document_idle"
     },
     {
       "matches": [
