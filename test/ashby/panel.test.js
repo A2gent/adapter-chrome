@@ -49,6 +49,7 @@ test('submit sends the text and page url to a Brute session and shows the reply'
 
   assert.equal(shadow.querySelector('.head').firstElementChild.className, 'avatar');
   assert.equal(shadow.querySelector('.avatar').src, 'chrome-extension://a2gent/icons/victoria-40.png');
+  assert.equal(shadow.querySelector('.name').textContent, 'Veronica via Agent ²');
   assert.equal(shadow.querySelector('.head').lastElementChild.className, 'logo');
   assert.equal(shadow.querySelector('.logo').src, 'chrome-extension://a2gent/icons/a2gent-32.png');
   assert.equal(shadow.querySelector('textarea').value, 'Autofill');

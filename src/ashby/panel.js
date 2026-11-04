@@ -4,6 +4,7 @@
   globalThis.__A2GENT_ASHBY_PANEL__ = true;
 
   const AGENT_NAME = 'Veronika (HR)';
+  const DISPLAY_NAME = 'Veronica via Agent ²';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const AVATAR_URL = chrome.runtime.getURL('icons/victoria-40.png');
   const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
@@ -123,7 +124,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     const textarea = el('textarea', { value: state.text, disabled: state.busy, oninput: () => { state.text = textarea.value; } });
     const button = el('button', { textContent: 'Submit', disabled: state.busy, onclick: submit });
     shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' },
-      el('div', { className: 'head' }, el('img', { className: 'avatar', src: AVATAR_URL, alt: AGENT_NAME, title: AGENT_NAME }), el('span', { className: 'name', textContent: AGENT_NAME }),
+      el('div', { className: 'head' }, el('img', { className: 'avatar', src: AVATAR_URL, alt: DISPLAY_NAME, title: DISPLAY_NAME }), el('span', { className: 'name', textContent: DISPLAY_NAME }),
         state.sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(state.sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null,
         el('img', { className: 'logo', src: LOGO_URL, alt: 'A2gent', title: 'A2gent' })),
       el('div', { className: 'body' }, textarea, button,
