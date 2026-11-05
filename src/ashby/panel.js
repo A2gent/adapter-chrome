@@ -3,7 +3,7 @@
   if (!renderMarkdown || globalThis.__A2GENT_ASHBY_PANEL__) return;
   globalThis.__A2GENT_ASHBY_PANEL__ = true;
 
-  const AGENT_NAME = 'Veronika (HR)';
+  const AGENT_ID = 'biz-victoria';
   const DISPLAY_NAME = 'Veronica';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const KNOWLEDGE_BASE_PROJECT_ID = 'system-kb';
@@ -36,8 +36,8 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
 
   const findAgent = async () => {
     const body = await api('/unified-agents/');
-    const agent = (Array.isArray(body?.agents) ? body.agents : []).find((candidate) => candidate.id && candidate.name === AGENT_NAME);
-    if (!agent) throw new Error('HR agent Veronika not found');
+    const agent = (Array.isArray(body?.agents) ? body.agents : []).find((candidate) => candidate.id === AGENT_ID);
+    if (!agent) throw new Error('HR agent Victoria not found');
     return agent;
   };
 

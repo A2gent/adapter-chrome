@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const source = (file) => fs.readFileSync(path.join(__dirname, '../../src', file), 'utf8');
 const settle = () => new Promise((resolve) => { setTimeout(resolve, 20); });
 
-const AGENTS = () => ({ agents: [{ id: 'biz-veronika', name: 'Veronika (HR)' }] });
+const AGENTS = () => ({ agents: [{ id: 'biz-victoria', name: 'Victoria' }] });
 const REPLY = { role: 'assistant', content: 'Form filled' };
 const networkError = () => ({ proxied: { ok: false, error: 'Network down' } });
 const httpError = (status, error) => () => ({ proxied: { ok: true, response: { ok: false, status, body: { error } } } });
@@ -59,21 +59,21 @@ test('submit sends the text and page url to a Brute session and shows the reply'
 
   const created = calls.find((call) => call.key === 'POST /sessions').body;
   assert.equal(created.task, 'Autofill\n\nPage: https://www.ashbyhq.com/careers?ashby_jid=1');
-  assert.equal(created.unified_agent_id, 'biz-veronika');
+  assert.equal(created.unified_agent_id, 'biz-victoria');
   assert.equal(created.project_id, 'system-kb');
   assert.equal(created.metadata.skip_telegram_sync, true);
   assert.match(shadow.querySelector('.out').textContent, /Form filled/);
 });
 
-test('no session is created when no agent has the exact HR name', async (t) => {
+test('no session is created when the Victoria agent is missing', async (t) => {
   const { count, shadow, submit } = mount(t, {
-    'GET /unified-agents/': () => ({ agents: [{ id: 'other', name: 'Veronika' }] }),
+    'GET /unified-agents/': () => ({ agents: [{ id: 'other', name: 'Victoria' }] }),
   });
 
   await submit();
 
   assert.equal(count('POST /sessions'), 0);
-  assert.equal(shadow.querySelector('.out.err').textContent, 'HR agent Veronika not found');
+  assert.equal(shadow.querySelector('.out.err').textContent, 'HR agent Victoria not found');
 });
 
 test('no session is created when the agent lookup fails', async (t) => {
