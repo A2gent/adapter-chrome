@@ -43,7 +43,15 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
     return agent;
   };
 
-  const buildTask = (text) => `${text}\n\nPage: ${location.href}`;
+  const buildTask = (text) => [
+    'Context: you are working through the A2gent Chrome extension, in the user\'s own Chrome profile, on one specific browser tab.',
+    `Tab URL: ${location.href}`,
+    `Tab title: ${document.title}`,
+    'Act inline on this page: read the page, fill fields and click buttons in this same tab. Do not open new tabs or navigate away unless the request asks for it.',
+    'The user (who they are and where to find their data) is described in the Knowledge Base project.',
+    '',
+    `Request: ${text}`,
+  ].join('\n');
 
   const startSession = async (task) => {
     const agent = await findAgent();

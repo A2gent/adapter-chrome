@@ -59,7 +59,10 @@ test('submit sends the text and page url to a Brute session and shows the reply'
   await submit();
 
   const created = calls.find((call) => call.key === 'POST /sessions').body;
-  assert.equal(created.task, 'Autofill\n\nPage: https://www.ashbyhq.com/careers?ashby_jid=1');
+  assert.match(created.task, /^Context: you are working through the A2gent Chrome extension/);
+  assert.match(created.task, /Tab URL: https:\/\/www\.ashbyhq\.com\/careers\?ashby_jid=1/);
+  assert.match(created.task, /Act inline on this page/);
+  assert.match(created.task, /\n\nRequest: Autofill$/);
   assert.equal(created.unified_agent_id, 'biz-victoria');
   assert.equal(created.project_id, 'system-kb');
   assert.equal(created.metadata.skip_telegram_sync, true);
@@ -166,7 +169,7 @@ test('follow-up on a finished session goes to the queue', async (t) => {
   await submit();
 
   assert.equal(count('POST /sessions'), 1);
-  assert.match(calls.find((call) => call.key === 'POST /sessions/s1/queue').body.message, /^Autofill/);
+  assert.match(calls.find((call) => call.key === 'POST /sessions/s1/queue').body.message, /\n\nRequest: Autofill$/);
 });
 
 test('a start conflict from the auto queue keeps polling', async (t) => {
