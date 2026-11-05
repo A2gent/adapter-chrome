@@ -49,7 +49,8 @@ test('submit sends the text and page url to a Brute session and shows the reply'
 
   assert.equal(shadow.querySelector('.head').firstElementChild.className, 'avatar');
   assert.equal(shadow.querySelector('.avatar').src, 'chrome-extension://a2gent/icons/victoria-40.png');
-  assert.equal(shadow.querySelector('.name').textContent, 'Veronica');
+  assert.equal(shadow.querySelector('.name').textContent, 'Victoria');
+  assert.equal(shadow.querySelector('.box').className, 'box');
   assert.equal(shadow.querySelector('.via').textContent, 'via Agent ²');
   assert.equal(shadow.querySelector('.head').lastElementChild.className, 'logo');
   assert.equal(shadow.querySelector('.logo').previousElementSibling.className, 'via');
@@ -62,6 +63,7 @@ test('submit sends the text and page url to a Brute session and shows the reply'
   assert.equal(created.unified_agent_id, 'biz-victoria');
   assert.equal(created.project_id, 'system-kb');
   assert.equal(created.metadata.skip_telegram_sync, true);
+  assert.equal(shadow.querySelector('.box').className, 'box side');
   assert.match(shadow.querySelector('.out').textContent, /Form filled/);
 });
 

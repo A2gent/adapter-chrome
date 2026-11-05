@@ -4,7 +4,7 @@
   globalThis.__A2GENT_ASHBY_PANEL__ = true;
 
   const AGENT_ID = 'biz-victoria';
-  const DISPLAY_NAME = 'Veronica';
+  const DISPLAY_NAME = 'Victoria';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const KNOWLEDGE_BASE_PROJECT_ID = 'system-kb';
   const AVATAR_URL = chrome.runtime.getURL('icons/victoria-40.png');
@@ -21,6 +21,8 @@
 .body{display:flex;flex-direction:column;gap:6px;padding:8px}textarea{width:100%;min-height:60px;resize:vertical;padding:6px;border:1px solid #c9d1dc;border-radius:6px;font-size:13px}
 button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:#1a73e8;color:#fff;padding:5px 14px;font-size:13px}button:disabled{opacity:.5;cursor:wait}
 .out{max-height:40vh;overflow:auto;padding:6px 8px;background:#f6f8fb;border-radius:6px;overflow-wrap:anywhere;user-select:text}.out.err{color:#b42318}.out:empty{display:none}
+.side{position:fixed;top:0;right:0;bottom:0;width:380px;height:100vh;border-radius:0;border-width:0 0 0 1px;display:flex;flex-direction:column}
+.side .body{flex:1;min-height:0}.side .out{flex:1;max-height:none}
 .md p,.md ul,.md ol,.md pre{margin:0 0 6px}.md>:last-child{margin-bottom:0}.md ul,.md ol{padding-left:20px}`;
 
   const api = async (path, options = {}) => {
@@ -125,7 +127,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
   const render = () => {
     const textarea = el('textarea', { value: state.text, disabled: state.busy, oninput: () => { state.text = textarea.value; } });
     const button = el('button', { textContent: 'Submit', disabled: state.busy, onclick: submit });
-    shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: 'box' },
+    shadow.replaceChildren(el('style', { textContent: STYLE }), el('div', { className: state.sessionId ? 'box side' : 'box' },
       el('div', { className: 'head' }, el('img', { className: 'avatar', src: AVATAR_URL, alt: DISPLAY_NAME, title: DISPLAY_NAME }), el('span', { className: 'name', textContent: DISPLAY_NAME }),
         state.sessionId ? el('a', { href: `${SESSION_URL}${encodeURIComponent(state.sessionId)}`, target: '_blank', rel: 'noopener', textContent: '↗', title: 'Open the session' }) : null,
         el('span', { className: 'via', textContent: 'via Agent ²' }),
