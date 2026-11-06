@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 
-const { adContainer, applyLearned, createScanner, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector, start } = require('../../src/adblock/content.js');
+const { adContainer, applyLearned, createScanner, createYoutubeAdSkipper, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector, start } = require('../../src/adblock/content.js');
 
 const page = (body, url = 'https://news.ee/') => {
   const { window } = new JSDOM(`<!doctype html><body>${body}</body>`, { url, pretendToBeVisual: true });
@@ -418,4 +418,51 @@ test('the Facebook ad rules do not run on other sites', () => {
 test('private hosts are skipped so intranet content is never sent out', () => {
   for (const host of ['localhost', 'localhost.', '127.0.0.1', 'nas.local', 'router', 'git.internal', 'nas.lan', 'app.corp', 'box.home.arpa', 'dev.test', 'foo.localhost', 'pc.tail1.ts.net']) assert.equal(isPrivateHost(host), true, host);
   assert.equal(isPrivateHost('rus.postimees.ee'), false);
+});
+
+const youtube = (playerClass) => {
+  const { doc, win } = page(`<div id="player" class="html5-video-player ${playerClass}"><video></video></div>`, 'https://www.youtube.com/watch?v=x');
+  return { doc, win, video: doc.querySelector('video') };
+};
+
+test('a YouTube video ad is muted and sped up, then sound and speed come back', () => {
+  const { doc, win, video } = youtube('ad-created ad-showing');
+  video.playbackRate = 1.5;
+  const skip = createYoutubeAdSkipper(doc, win);
+  skip();
+  assert.equal(video.muted, true);
+  assert.equal(video.playbackRate, 16);
+  skip();
+  doc.getElementById('player').classList.remove('ad-showing');
+  skip();
+  assert.equal(video.muted, false);
+  assert.equal(video.playbackRate, 1.5);
+  win.close();
+});
+
+test('a film on a player marked only ad-created keeps its speed and sound', () => {
+  const { doc, win, video } = youtube('ad-created');
+  createYoutubeAdSkipper(doc, win)();
+  assert.equal(video.muted, false);
+  assert.equal(video.playbackRate, 1);
+  win.close();
+});
+
+test('YouTube feed ads hide with the cell around them, and other cells stay', () => {
+  const { doc, win } = page('<ytd-rich-item-renderer id="ad"><ytd-ad-slot-renderer></ytd-ad-slot-renderer></ytd-rich-item-renderer><ytd-rich-item-renderer id="film"></ytd-rich-item-renderer>', 'https://www.youtube.com/');
+  win.chrome = { storage: { local: { get: (_key, done) => done({ 'a2gent.adapterChrome.adblock': { enabled: true } }) } } };
+  start(win);
+  assert.equal(win.getComputedStyle(doc.getElementById('ad')).display, 'none');
+  assert.notEqual(win.getComputedStyle(doc.getElementById('film')).display, 'none');
+  win.close();
+});
+
+test('YouTube rules stay off on other sites and on a paused YouTube', () => {
+  for (const [url, paused] of [['https://news.ee/', {}], ['https://www.youtube.com/', { 'www.youtube.com': true }]]) {
+    const { doc, win } = page('', url);
+    win.chrome = { storage: { local: { get: (_key, done) => done({ 'a2gent.adapterChrome.adblock': { enabled: true, paused } }) } } };
+    start(win);
+    assert.equal(doc.querySelector('style'), null);
+    win.close();
+  }
 });

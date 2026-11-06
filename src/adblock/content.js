@@ -258,6 +258,71 @@
     }
   };
 
+  // WHY: YouTube recycles feed cells for other videos, and a CSS rule lets go of them by itself.
+  const YOUTUBE_HOST = /(?:^|\.)youtube\.com$/;
+  const YOUTUBE_AD_CSS = `${[
+    'ytd-rich-item-renderer:has(ytd-ad-slot-renderer)',
+    'ytd-ad-slot-renderer',
+    'ytd-in-feed-ad-layout-renderer',
+    'ytd-promoted-sparkles-web-renderer',
+    'ytd-display-ad-renderer',
+    'ytd-companion-slot-renderer',
+    'ytd-action-companion-ad-renderer',
+    'ytd-banner-promo-renderer',
+    'ytd-engagement-panel-section-list-renderer:has(ytd-ads-engagement-panel-content-renderer)',
+    'ytm-promoted-sparkles-web-renderer',
+    'ytm-companion-ad-renderer',
+    'ad-slot-renderer',
+    '#masthead-ad',
+    '#player-ads',
+    '.ytp-ad-overlay-container',
+    '.ytp-ad-image-overlay',
+  ].join(',')}{display:none!important}`;
+  // The ad-created class also sits on players showing the film, so only ad-showing means an ad is on.
+  const YOUTUBE_AD_PLAYER = '.html5-video-player.ad-showing';
+  const YOUTUBE_AD_RATE = 16;
+  const YOUTUBE_AD_POLL_MS = 250;
+
+  // WHY: a video ad plays in the film's own <video>, so it cannot be hidden. It is sped up rather
+  // than seeked to its end: an ad stitched into the stream shares the film's timeline, and a seek
+  // there would jump past the film. The Skip button is left alone: it ignored scripted clicks when
+  // tried on live ads. The poll covers the next ad in a row, which resets the rate.
+  const createYoutubeAdSkipper = (doc, win) => {
+    let saved = null;
+    let timer = 0;
+
+    const release = () => {
+      win.clearInterval(timer);
+      timer = 0;
+      if (!saved) return;
+      saved.video.muted = saved.muted;
+      saved.video.playbackRate = saved.rate;
+      saved = null;
+    };
+
+    const skip = () => {
+      const player = doc.querySelector(YOUTUBE_AD_PLAYER);
+      const video = player?.querySelector('video');
+      if (!video) {
+        release();
+        return;
+      }
+      saved ||= { video, muted: video.muted, rate: video.playbackRate };
+      timer ||= win.setInterval(skip, YOUTUBE_AD_POLL_MS);
+      video.muted = true;
+      video.playbackRate = YOUTUBE_AD_RATE;
+    };
+
+    return skip;
+  };
+
+  const blockYoutubeAds = (doc, win) => {
+    const style = doc.createElement('style');
+    style.textContent = YOUTUBE_AD_CSS;
+    (doc.head || doc.documentElement).append(style);
+    return createYoutubeAdSkipper(doc, win);
+  };
+
   const certainHides = new Map();
 
   const isCertainAd = (element, win) => {
@@ -353,6 +418,7 @@
       const state = saved[STORAGE_KEY];
       if (!state?.enabled || state.paused?.[host]) return;
       const verdicts = { ...state.sites?.[host]?.verdicts };
+      const skipYoutubeAd = YOUTUBE_HOST.test(host) ? blockYoutubeAds(doc, root) : null;
 
       const scan = createScanner({
         doc,
@@ -382,6 +448,7 @@
         schedule();
       };
       new root.MutationObserver((mutations) => {
+        skipYoutubeAd?.();
         if (mutations.some(addsCertainAd)) hideCertainAds(doc, root);
         schedule();
       }).observe(doc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: WATCHED_ATTRIBUTES });
@@ -395,5 +462,5 @@
     });
   };
 
-  return { adContainer, applyLearned, createScanner, describe, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector, start };
+  return { adContainer, applyLearned, createScanner, createYoutubeAdSkipper, describe, findCandidates, hideCertainAds, isPrivateHost, isSafeToHide, stableSelector, start };
 });
