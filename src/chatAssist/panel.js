@@ -9,6 +9,7 @@
   globalThis.__A2GENT_CHAT_ASSIST_PANEL__ = true;
 
   const AGENT = { id: 'biz-aristotle', name: 'Аристотель' };
+  const PROJECT_KEY = 'a2gent.adapterChrome.chatProject';
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const POLL_MS = 2000;
   const REPLY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -20,6 +21,7 @@
   const LOGO_URL = chrome.runtime.getURL('icons/a2gent-32.png');
   const STYLE = `:host{all:initial;display:block;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c2333}
 *{box-sizing:border-box;font-family:inherit}.box{margin:2px 8px;border:1px solid #1a73e8;border-radius:8px}.bar{display:flex;gap:4px;align-items:center;padding:2px 6px}.avatar{flex:none;width:20px;height:20px;border-radius:50%}.name{flex:none;white-space:nowrap;color:#525c6b}.via{flex:none;white-space:nowrap;margin-left:auto;font-size:11px;color:#9aa3b2}.logo{flex:none;width:16px;height:16px;border-radius:3px}
+select{flex:0 1 auto;min-width:0;max-width:140px;height:24px;border:0;border-radius:5px;background:#eef1f6;color:inherit;font-size:12px}select:disabled{opacity:.5;cursor:wait}
 button{cursor:pointer;border:0;border-radius:5px;background:#eef1f6;min-width:26px;height:24px;font-size:13px}button:hover{background:#dfe5ee}button:disabled{opacity:.5;cursor:wait}
 a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6px 6px;padding:6px 8px;max-height:40vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f6f8fb;border:1px solid #0001;border-radius:8px}
 .out.err{color:#b42318}.out:empty{display:none}
@@ -34,6 +36,8 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
 
   const widgets = new Map();
   let scanTimer;
+  let projects = [];
+  let projectId = '';
 
   const api = async (path, options = {}) => {
     const proxied = await chrome.runtime.sendMessage({ type: 'A2GENT_BRUTE_API_FETCH', path, options });
@@ -45,10 +49,31 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
   const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
+  const loadProjects = async () => {
+    try {
+      const saved = (await chrome.storage.local.get(PROJECT_KEY))[PROJECT_KEY];
+      const list = await api('/projects');
+      projects = (Array.isArray(list) ? list : []).filter((project) => project.id && project.name)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      projectId = projects.some((project) => project.id === saved) ? saved : '';
+    } catch {
+      projects = [];
+      projectId = '';
+    }
+    for (const widget of widgets.values()) render(widget);
+  };
+
+  const chooseProject = (id) => {
+    projectId = id;
+    chrome.storage.local.set({ [PROJECT_KEY]: id });
+    for (const widget of widgets.values()) render(widget);
+  };
+
   const startSession = async (task, images) => {
     const session = await post('/sessions', {
       agent_id: 'build',
       unified_agent_id: AGENT.id,
+      ...(projectId && { project_id: projectId }),
       queued: true,
       queue_mode: 'serial',
       task,
@@ -98,12 +123,21 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
     return node;
   };
 
+  const projectSelect = (disabled) => {
+    const select = el('select', { title: 'Project context for the agent', disabled, onchange: () => chooseProject(select.value) },
+      el('option', { value: '', textContent: 'No project' }),
+      ...projects.map((project) => el('option', { value: project.id, textContent: project.name })));
+    select.value = projectId;
+    return select;
+  };
+
   const render = (widget) => {
     const { busy, error, reply, sessionId, imageStatus, imageError } = widget;
     const button = (textContent, title, onclick) => el('button', { textContent, title, disabled: busy, onclick });
     const bar = el('div', { className: 'bar' },
       el('img', { className: 'avatar', src: AVATAR_URL, alt: AGENT.name, title: AGENT.name }),
       el('span', { className: 'name', textContent: 'Aristotle' }),
+      projects.length ? projectSelect(busy) : null,
       button('🔎', 'Analyze this conversation', () => analyze(widget)),
       button('📝', 'Review the draft typed in the reply box', () => reviewDraft(widget)),
       busy ? el('span', { textContent: '…' }) : null,
@@ -129,7 +163,7 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
       if (!transcript) throw new Error('No messages found in this conversation.');
       // Chat can reuse one composer for another conversation; a session must not mix conversations.
       const key = transcript.slice(0, CONVERSATION_KEY_LENGTH);
-      if (widget.key !== key) Object.assign(widget, { key, sessionId: '', transcript: '', sources: [] });
+      if (widget.key !== key || widget.sessionProjectId !== projectId) Object.assign(widget, { key, sessionId: '', transcript: '', sources: [], sessionProjectId: projectId });
       // Brute only delivers queued messages to completed sessions; anything else needs a fresh session.
       const session = widget.sessionId ? await api(`/sessions/${encodeURIComponent(widget.sessionId)}`) : null;
       const reusable = session?.status === 'completed';
@@ -189,7 +223,7 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
       host.setAttribute(HOST_ATTR, '');
       // Chat has global keyboard shortcuts; keep our controls away from them.
       for (const type of ['click', 'mousedown', 'keydown', 'keyup']) host.addEventListener(type, (event) => event.stopPropagation());
-      const widget = { host, shadow: host.attachShadow({ mode: 'closed' }), textbox, ...conversation, key: '', sessionId: '', transcript: '', sources: [], busy: false, error: '', reply: '', imageStatus: '', imageError: '' };
+      const widget = { host, shadow: host.attachShadow({ mode: 'closed' }), textbox, ...conversation, key: '', sessionId: '', sessionProjectId: '', transcript: '', sources: [], busy: false, error: '', reply: '', imageStatus: '', imageError: '' };
       widgets.set(textbox, widget);
       render(widget);
     }
@@ -201,6 +235,7 @@ a{color:#1a5fb4;text-decoration:none}.bar span{font-size:12px}.out{margin:2px 6p
   };
 
   scan();
+  loadProjects();
   // Chat is a SPA that rebuilds panes while navigating, so composers come and go.
   new MutationObserver(() => {
     if (!scanTimer) scanTimer = setTimeout(scan, SCAN_DELAY_MS);

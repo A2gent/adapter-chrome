@@ -103,6 +103,9 @@
     } catch {
       text = String(value);
     }
+    if (typeof text !== 'string') {
+      text = String(value);
+    }
     return text.length > limit ? `${text.slice(0, limit)}…[truncated]` : text;
   };
 

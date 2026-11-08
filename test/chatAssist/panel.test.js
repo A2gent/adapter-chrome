@@ -16,6 +16,7 @@ const setup = (t, handlers) => {
   document.getElementById('msg').innerText = 'Ann\n,\n9:00 AM\n,\nCan we ship?';
   window.Element.prototype.getClientRects = () => [{}];
   const calls = [];
+  const stored = [];
   window.chrome = {
     runtime: {
       getURL: (asset) => `chrome-extension://a2gent/${asset}`,
@@ -27,7 +28,7 @@ const setup = (t, handlers) => {
         return { ok: true, response: { ok: true, status: 200, body: handlers[key]?.(body) } };
       },
     },
-    storage: { local: { get: async () => ({}), set: () => {} } },
+    storage: { local: { get: async () => handlers.stored || {}, set: (values) => { stored.push(values); } } },
   };
   const shadows = [];
   const attach = window.Element.prototype.attachShadow;
@@ -38,7 +39,7 @@ const setup = (t, handlers) => {
   window.eval(source('panel.js'));
   const find = (selector) => shadows[0].querySelector(selector);
   const buttons = () => [...shadows[0].querySelectorAll('button')];
-  return { document, window, calls, find, buttons };
+  return { document, window, calls, stored, find, buttons };
 };
 
 const completed = (...contents) => () => ({
@@ -240,4 +241,77 @@ test('hiding the composer keeps the widget and its reply', async (t) => {
   const host = document.querySelector('[data-a2gent-chat-assist]');
   assert.equal(host.hidden, true);
   assert.equal(find('.out').textContent, 'kept');
+});
+
+const pick = (find, id) => {
+  const select = find('select');
+  select.value = id;
+  select.dispatchEvent(new select.ownerDocument.defaultView.Event('change'));
+};
+
+const withProjects = {
+  'GET /projects': () => [{ id: 'p2', name: 'Zeta' }, { id: 'p1', name: 'Alpha' }, { id: 'bad' }],
+  'POST /sessions': () => ({ id: 's1' }),
+  'POST /sessions/s1/start': () => ({}),
+  'GET /sessions/s1': completed('ok'),
+};
+
+test('the project picker lists named projects and defaults to none', async (t) => {
+  const { find, calls } = setup(t, withProjects);
+  await settle();
+
+  assert.deepEqual([...find('select').options].map((option) => option.textContent), ['No project', 'Alpha', 'Zeta']);
+  assert.equal(find('select').value, '');
+  assert.equal(calls.some((call) => call.key === 'POST /sessions'), false);
+});
+
+test('the chosen project is saved and sent with the new session', async (t) => {
+  const { calls, stored, find, buttons } = setup(t, withProjects);
+  await settle();
+  pick(find, 'p1');
+
+  assert.equal(JSON.stringify(stored), '[{"a2gent.adapterChrome.chatProject":"p1"}]');
+  assert.equal(find('select').value, 'p1');
+  buttons()[0].click();
+  await settle();
+
+  assert.equal(calls.find((call) => call.key === 'POST /sessions').body.project_id, 'p1');
+});
+
+test('a remembered project is restored and an unknown one is dropped', async (t) => {
+  const restored = setup(t, { ...withProjects, stored: { 'a2gent.adapterChrome.chatProject': 'p2' } });
+  await settle();
+  assert.equal(restored.find('select').value, 'p2');
+
+  const dropped = setup(t, { ...withProjects, stored: { 'a2gent.adapterChrome.chatProject': 'gone' } });
+  await settle();
+  assert.equal(dropped.find('select').value, '');
+});
+
+test('switching the project starts a fresh session instead of queueing into the old one', async (t) => {
+  let id = 0;
+  const { calls, find, buttons } = setup(t, {
+    ...withProjects,
+    'POST /sessions': () => ({ id: `s${id += 1}` }),
+    'GET /sessions/s1': completed('one'),
+    'GET /sessions/s2': completed('two'),
+  });
+  await settle();
+  buttons()[0].click();
+  await settle();
+  pick(find, 'p1');
+  buttons()[0].click();
+  await settle();
+
+  assert.equal(calls.some((call) => call.key.endsWith('/queue')), false);
+  assert.equal(calls.filter((call) => call.key === 'POST /sessions')[1].body.project_id, 'p1');
+});
+
+test('a project list that fails to load hides the picker and still analyzes', async (t) => {
+  const { find, buttons, calls } = setup(t, { ...withProjects, 'GET /projects': () => { throw new Error('down'); } });
+  await settle();
+  assert.equal(find('select'), null);
+  buttons()[0].click();
+  await settle();
+  assert.equal('project_id' in calls.find((call) => call.key === 'POST /sessions').body, false);
 });
