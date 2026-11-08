@@ -285,8 +285,10 @@
 
   // WHY: a video ad plays in the film's own <video>, so it cannot be hidden. It is sped up rather
   // than seeked to its end: an ad stitched into the stream shares the film's timeline, and a seek
-  // there would jump past the film. The Skip button is left alone: it ignored scripted clicks when
-  // tried on live ads. The poll covers the next ad in a row, which resets the rate.
+  // there would jump past the film. The Skip button is left alone: it ignores untrusted clicks.
+  // Neither a trusted click nor pruning ads from the player response starts the film sooner: while
+  // an ad is due, YouTube holds the film stream about 10 s after load and shows a black screen.
+  // The poll covers the next ad in a row, which resets the rate.
   const createYoutubeAdSkipper = (doc, win) => {
     let saved = null;
     let timer = 0;
