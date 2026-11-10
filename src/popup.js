@@ -25,6 +25,19 @@ document.querySelectorAll('[data-mode]').forEach((button) => {
   });
 });
 
+document.getElementById('victoria').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const result = await chrome.runtime.sendMessage({
+    type: 'A2GENT_SHOW_HR_PANEL',
+    tab: tab ? { id: tab.id, url: tab.url } : null,
+  }).catch((error) => ({ ok: false, error: String(error?.message || error) }));
+  if (result && result.ok === false) {
+    document.getElementById('error').textContent = result.error || 'Failed';
+    return;
+  }
+  window.close();
+});
+
 document.getElementById('settings').addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
   window.close();

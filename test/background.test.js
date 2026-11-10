@@ -327,6 +327,38 @@ test('background injects content scripts when action toggle misses the tab', asy
   );
 });
 
+test('the toolbar can open the Victoria panel on the active web page', async () => {
+  const background = loadBackground();
+  const response = await new Promise((resolve, reject) => {
+    const keepOpen = background.onMessage({
+      type: 'A2GENT_SHOW_HR_PANEL',
+      tab: { id: 9, url: 'https://job-boards.greenhouse.io/canonical_managed_posts/jobs/8371032' },
+    }, {}, resolve);
+    if (keepOpen !== true) reject(new Error(`expected async handler, got ${keepOpen}`));
+  });
+
+  assert.deepEqual(toPlain(response), { ok: true });
+  assert.deepEqual(toPlain(background.calls.executeScripts), [{
+    target: { tabId: 9 },
+    files: ['src/chatAssist/markdown.js', 'src/ashby/panel.js'],
+  }]);
+});
+
+test('the Victoria panel is refused on browser-internal pages', async () => {
+  const background = loadBackground();
+  const response = await new Promise((resolve, reject) => {
+    const keepOpen = background.onMessage({
+      type: 'A2GENT_SHOW_HR_PANEL',
+      tab: { id: 9, url: 'chrome://extensions' },
+    }, {}, resolve);
+    if (keepOpen !== true) reject(new Error(`expected async handler, got ${keepOpen}`));
+  });
+
+  assert.equal(response.ok, false);
+  assert.match(response.error, /web page/);
+  assert.equal(background.calls.executeScripts.length, 0);
+});
+
 test('background streams Brute response chunks over extension ports', async () => {
   const responseDone = new Promise((resolve) => {
     const background = loadBackground({

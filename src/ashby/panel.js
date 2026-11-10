@@ -5,6 +5,12 @@
 
   const AGENT_ID = 'biz-victoria';
   const DISPLAY_NAME = 'Victoria';
+  const pageSource = () => {
+    const host = location.hostname.toLowerCase();
+    if (host === 'ashbyhq.com' || host.endsWith('.ashbyhq.com')) return 'ashby';
+    if (host === 'greenhouse.io' || host.endsWith('.greenhouse.io')) return 'greenhouse';
+    return 'extension';
+  };
   const SESSION_URL = 'https://my.a2gent.net/#/chat/';
   const KNOWLEDGE_BASE_PROJECT_ID = 'system-kb';
   const AVATAR_URL = chrome.runtime.getURL('icons/victoria-40.png');
@@ -63,7 +69,7 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
       queue_mode: 'serial',
       task,
       metadata: {
-        source: 'ashby',
+        source: pageSource(),
         launch_target: 'agent',
         launch_agent_id: agent.id,
         launch_agent_name: agent.name,

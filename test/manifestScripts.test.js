@@ -81,12 +81,12 @@ test('manifest exposes content-injected images to page DOM', () => {
     },
     {
       resources: ['icons/a2gent-32.png', 'icons/victoria-40.png'],
-      matches: ['https://www.ashbyhq.com/*'],
+      matches: ['http://*/*', 'https://*/*'],
     },
   ]);
   assert.equal(exists('cursor.png'), true, 'cursor.png must be bundled with the extension');
   assert.equal(exists('icons/a2gent-16.png'), true, 'the A2gent icon must be bundled with the extension');
-  assert.equal(exists('icons/victoria-40.png'), true, 'the Ashby agent avatar must be bundled with the extension');
+  assert.equal(exists('icons/victoria-40.png'), true, 'the Victoria avatar must be bundled with the extension');
 });
 
 test('manifest wires the HearHear audio bundle, offscreen document and options page', () => {
@@ -119,9 +119,15 @@ test('manifest reaches Google Chat inside the cross-origin Gmail iframes', () =>
   assert.deepEqual(entry.js, ['src/chatAssist/googleChat.js', 'src/chatAssist/chatImage.js', 'src/chatAssist/markdown.js', 'src/chatAssist/panel.js']);
 });
 
-test('manifest loads the Ashby panel only on ashbyhq.com', () => {
+test('manifest opens the Victoria panel on Ashby and Greenhouse job pages', () => {
   const entry = manifest.content_scripts.find((item) => item.js.includes('src/ashby/panel.js'));
-  assert.deepEqual(entry.matches, ['https://www.ashbyhq.com/*']);
+  assert.deepEqual(entry.matches, [
+    'https://www.ashbyhq.com/*',
+    'https://boards.greenhouse.io/*',
+    'https://job-boards.greenhouse.io/*',
+  ]);
   assert.deepEqual(entry.js, ['src/chatAssist/markdown.js', 'src/ashby/panel.js']);
-  assert.ok(manifest.host_permissions.includes('https://www.ashbyhq.com/*'));
+  for (const host of ['https://www.ashbyhq.com/*', 'https://boards.greenhouse.io/*', 'https://job-boards.greenhouse.io/*']) {
+    assert.ok(manifest.host_permissions.includes(host), host);
+  }
 });

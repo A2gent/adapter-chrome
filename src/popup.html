@@ -11,6 +11,7 @@
   .item:focus-visible { outline: 2px solid #4f7cff; outline-offset: -2px; }
   .item input { margin: 0 0 0 auto; flex: none; }
   .icon { flex: none; width: 20px; font-size: 15px; text-align: center; }
+  img.icon { height: 20px; border-radius: 50%; object-fit: cover; }
   .sub { padding-left: 36px; }
   .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   [aria-pressed="true"] { background: rgba(79, 124, 255, 0.15); }
@@ -21,6 +22,7 @@
 <button class="item" data-mode="audio" title="Read articles aloud (HearHear)"><span class="icon">🎧</span>Audio</button>
 <button class="item" data-mode="design" title="Annotate the page and start a Brute session"><span class="icon">✏️</span>Design</button>
 <button class="item" data-mode="sync" title="LinkedIn profiles → Brute people"><span class="icon">👥</span>Sync</button>
+<button class="item" id="victoria" title="Open Victoria on this page to fill a job application"><img class="icon" src="../icons/victoria-40.png" alt="">Victoria</button>
 <hr>
 <label class="item" title="Hide ads recognized by System One. Ad-like page blocks are sent to the classifier."><span class="icon">🛡️</span>Adblock<input type="checkbox" id="adblock"></label>
 <label class="item sub" id="adblock-site-row" title="Adblock on this site" hidden><span class="grow" id="adblock-host"></span><input type="checkbox" id="adblock-site"></label>

@@ -13,8 +13,8 @@ const networkError = () => ({ proxied: { ok: false, error: 'Network down' } });
 const httpError = (status, error) => () => ({ proxied: { ok: true, response: { ok: false, status, body: { error } } } });
 const inOrder = (...steps) => () => (steps.length > 1 ? steps.shift() : steps[0])();
 
-const mount = (t, handlers) => {
-  const dom = new JSDOM('<body></body>', { url: 'https://www.ashbyhq.com/careers?ashby_jid=1', runScripts: 'outside-only' });
+const mount = (t, handlers, url = 'https://www.ashbyhq.com/careers?ashby_jid=1') => {
+  const dom = new JSDOM('<body></body>', { url, runScripts: 'outside-only' });
   const { window } = dom;
   t.after(() => window.close());
   const calls = [];
@@ -65,9 +65,39 @@ test('submit sends the text and page url to a Brute session and shows the reply'
   assert.match(created.task, /\n\nRequest: Autofill$/);
   assert.equal(created.unified_agent_id, 'biz-victoria');
   assert.equal(created.project_id, 'system-kb');
+  assert.equal(created.metadata.source, 'ashby');
   assert.equal(created.metadata.skip_telegram_sync, true);
   assert.equal(shadow.querySelector('.box').className, 'box side');
   assert.match(shadow.querySelector('.out').textContent, /Form filled/);
+});
+
+test('a Greenhouse application tags the session as greenhouse', async (t) => {
+  const { calls, shadow, submit } = mount(t, {
+    'GET /unified-agents/': AGENTS,
+    'POST /sessions': () => ({ id: 's1' }),
+    'POST /sessions/s1/start': () => ({}),
+    'GET /sessions/s1': () => ({ status: 'completed', messages: [REPLY] }),
+  }, 'https://job-boards.greenhouse.io/canonical_managed_posts/jobs/8371032?gh_src=l3evnqyy1us');
+
+  assert.equal(shadow.querySelector('.name').textContent, 'Victoria');
+  await submit();
+
+  const created = calls.find((call) => call.key === 'POST /sessions').body;
+  assert.equal(created.metadata.source, 'greenhouse');
+  assert.match(created.task, /Tab URL: https:\/\/job-boards\.greenhouse\.io\/canonical_managed_posts\/jobs\/8371032\?gh_src=l3evnqyy1us/);
+});
+
+test('a page outside the job boards tags the session as extension', async (t) => {
+  const { calls, submit } = mount(t, {
+    'GET /unified-agents/': AGENTS,
+    'POST /sessions': () => ({ id: 's1' }),
+    'POST /sessions/s1/start': () => ({}),
+    'GET /sessions/s1': () => ({ status: 'completed', messages: [REPLY] }),
+  }, 'https://example.com/jobs/1');
+
+  await submit();
+
+  assert.equal(calls.find((call) => call.key === 'POST /sessions').body.metadata.source, 'extension');
 });
 
 test('no session is created when the Victoria agent is missing', async (t) => {

@@ -409,6 +409,7 @@ chrome.storage.onChanged?.addListener((changes, areaName) => {
 // Audio (HearHear player, default), design (session overlay) or sync (LinkedIn -> person cards) mode,
 // picked in the toolbar popup (src/popup.html).
 const MODES = ['audio', 'design', 'sync'];
+const HR_PANEL_FILES = ['src/chatAssist/markdown.js', 'src/ashby/panel.js'];
 
 // Shows/hides the UI of the given mode on the tab.
 const toggleModeUi = async (tab, mode) => {
@@ -437,6 +438,13 @@ const toggleModeUi = async (tab, mode) => {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/drawingAnnotation.js', 'src/contentDrawing.js', 'src/contentUi.js', 'src/contentScript/shared.js', 'src/contentScript/sessionLaunch.js', 'src/contentScript/projectMatching.js', 'src/contentScript/diagnosticsHelpers.js', 'src/contentScript/overlayFocus.js', 'src/contentScript/drawingBridge.js', 'src/contentScript/sessionEvents.js', 'src/contentScript/caesarApi.js', 'src/contentScript/pageDiagnostics.js', 'src/contentScript/projectSettings.js', 'src/contentScript/renderWiring.js', 'src/contentScript.js', 'src/browserControlBridge.js'] });
     await chrome.tabs.sendMessage(tab.id, { type: 'A2GENT_TOGGLE_OVERLAY' });
   }
+};
+
+const showHrPanel = async (tab) => {
+  if (!tab?.id || !tab.url || !/^https?:\/\//i.test(tab.url)) {
+    throw new Error('Victoria can only open on a normal web page.');
+  }
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: HR_PANEL_FILES });
 };
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -499,6 +507,13 @@ const captureSenderTab = async (sender) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== 'object') {
     return false;
+  }
+
+  if (message.type === 'A2GENT_SHOW_HR_PANEL') {
+    void showHrPanel(message.tab)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+    return true;
   }
 
   if (message.type === 'A2GENT_ACTIVATE_MODE') {

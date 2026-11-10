@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "A2gent Brute Browser Adapter",
   "version": "0.1.0",
-  "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), sync LinkedIn profiles into Brute person cards (sync mode), or review Google Chat threads and reply drafts with a Brute agent.",
+  "description": "Create and continue local Brute sessions from the current page (design mode), listen to articles aloud with HearHear (audio mode, default), sync LinkedIn profiles into Brute person cards (sync mode), review Google Chat threads and reply drafts with a Brute agent, or fill Ashby and Greenhouse job applications with Victoria.",
   "action": {
     "default_title": "A2gent: pick a mode",
     "default_popup": "src/popup.html",
@@ -39,7 +39,9 @@
     "https://mail.google.com/*",
     "https://lh3.google.com/*",
     "https://*.googleusercontent.com/*",
-    "https://www.ashbyhq.com/*"
+    "https://www.ashbyhq.com/*",
+    "https://boards.greenhouse.io/*",
+    "https://job-boards.greenhouse.io/*"
   ],
   "background": {
     "service_worker": "src/background.js"
@@ -142,7 +144,9 @@
     },
     {
       "matches": [
-        "https://www.ashbyhq.com/*"
+        "https://www.ashbyhq.com/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*"
       ],
       "js": [
         "src/chatAssist/markdown.js",
@@ -186,7 +190,8 @@
         "icons/victoria-40.png"
       ],
       "matches": [
-        "https://www.ashbyhq.com/*"
+        "http://*/*",
+        "https://*/*"
       ]
     }
   ],

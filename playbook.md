@@ -14,6 +14,7 @@
 - When minifying diagnostic JSON, update both exact string assertions and regexes that assumed spaces after colons.
 
 - Chrome API mocks throw host-realm errors into the background VM. Existing `instanceof Error` formatting may include an `Error:` prefix; assert the error detail rather than assuming identical realm formatting.
+- Objects created by `window.eval` in JSDOM use the page realm. `assert.deepEqual` can reject them as "not reference-equal" even when the fields match. Compare `JSON.parse(JSON.stringify(value))`.
 
 - Run component-relative edits and tests from the component repository root, not the session working directory if it is nested beneath a package.
 
