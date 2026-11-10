@@ -13,8 +13,8 @@ const networkError = () => ({ proxied: { ok: false, error: 'Network down' } });
 const httpError = (status, error) => () => ({ proxied: { ok: true, response: { ok: false, status, body: { error } } } });
 const inOrder = (...steps) => () => (steps.length > 1 ? steps.shift() : steps[0])();
 
-const mount = (t, handlers, url = 'https://www.ashbyhq.com/careers?ashby_jid=1') => {
-  const dom = new JSDOM('<body></body>', { url, runScripts: 'outside-only' });
+const mount = (t, handlers, url = 'https://www.ashbyhq.com/careers?ashby_jid=1', html = '<body></body>') => {
+  const dom = new JSDOM(html, { url, runScripts: 'outside-only' });
   const { window } = dom;
   t.after(() => window.close());
   const calls = [];
@@ -36,7 +36,7 @@ const mount = (t, handlers, url = 'https://www.ashbyhq.com/careers?ashby_jid=1')
   window.eval(source('ashby/panel.js'));
   const count = (key) => calls.filter((call) => call.key === key).length;
   const submit = async () => { shadow.querySelector('button').click(); await settle(); };
-  return { calls, count, shadow, submit };
+  return { calls, count, shadow, submit, document: window.document };
 };
 
 test('submit sends the text and page url to a Brute session and shows the reply', async (t) => {
@@ -69,6 +69,29 @@ test('submit sends the text and page url to a Brute session and shows the reply'
   assert.equal(created.metadata.skip_telegram_sync, true);
   assert.equal(shadow.querySelector('.box').className, 'box side');
   assert.match(shadow.querySelector('.out').textContent, /Form filled/);
+});
+
+test('a Remix job page keeps the card out of the document until React has adopted the page', async (t) => {
+  const html = '<!DOCTYPE html><html><body><script>window.__remixContext={}</script><main>Job</main></body></html>';
+  const { document } = mount(t, {}, 'https://job-boards.greenhouse.io/acme/jobs/1', html);
+
+  assert.equal(document.querySelector('[data-a2gent-ashby]'), null);
+  document.dispatchEvent(new document.defaultView.Event('a2gent-hydrated'));
+  assert.ok(document.querySelector('[data-a2gent-ashby]'));
+});
+
+test('a page that only mentions Remix in prose still shows the card immediately', async (t) => {
+  const html = '<!DOCTYPE html><html><body><script>const note = "see __remixContext in the docs";</script></body></html>';
+  const { document } = mount(t, {}, 'https://example.com/article', html);
+
+  assert.ok(document.querySelector('[data-a2gent-ashby]'));
+});
+
+test('a Remix page that has already adopted its HTML shows the card immediately', async (t) => {
+  const html = '<!DOCTYPE html><html data-a2gent-hydrated=""><body><script>window.__remixContext={}</script></body></html>';
+  const { document } = mount(t, {}, 'https://job-boards.greenhouse.io/acme/jobs/1', html);
+
+  assert.ok(document.querySelector('[data-a2gent-ashby]'));
 });
 
 test('a Greenhouse application tags the session as greenhouse', async (t) => {

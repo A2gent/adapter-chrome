@@ -343,4 +343,75 @@
         });
     }
   });
+
+  // WHY: Remix and Next paint server HTML, then adopt it. A card inserted before that
+  // adoption makes React rebuild the page (minified error 418). The signal is an
+  // attribute so the extension UI, which cannot see the page's React objects, can wait.
+  const serverRenderedReact = () => [...document.scripts].some((script) => script.id === '__NEXT_DATA__' || (script.textContent || '').includes('window.__remixContext'));
+  const reactContainer = (node) => {
+    if (!node) return false;
+    try {
+      return Object.getOwnPropertyNames(node).some((key) => key.startsWith('__reactContainer$'));
+    } catch {
+      return false;
+    }
+  };
+  const watchHydration = () => {
+    const started = Date.now();
+    let settled = false;
+    const notify = () => {
+      if (settled || !document.documentElement) return;
+      settled = true;
+      document.documentElement.setAttribute('data-a2gent-hydrated', '');
+      document.dispatchEvent(new Event('a2gent-hydrated'));
+    };
+    const reactRoots = () => {
+      const nodes = [document, document.documentElement, document.body];
+      for (const id of ['job-board-renderer', '__next']) {
+        const found = document.getElementById(id);
+        if (found) nodes.push(found);
+      }
+      if (document.body) nodes.push(...document.body.children);
+      return nodes;
+    };
+    // WHY: the React root exists as soon as hydration starts, and the walk can
+    // continue after that. Signal only once the document has stopped changing.
+    const signalAfterAdoption = () => {
+      let quiet = 0;
+      let cap = 0;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        observer.disconnect();
+        clearTimeout(quiet);
+        clearTimeout(cap);
+        notify();
+      };
+      const observer = new MutationObserver(() => {
+        if (done) return;
+        clearTimeout(quiet);
+        quiet = setTimeout(finish, 200);
+      });
+      if (document.documentElement) observer.observe(document.documentElement, { childList: true, subtree: true });
+      quiet = setTimeout(finish, 200);
+      cap = setTimeout(finish, 2000);
+    };
+    const tick = () => {
+      if (settled || !document.defaultView) return;
+      if (reactRoots().some(reactContainer)) {
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(signalAfterAdoption);
+        else setTimeout(signalAfterAdoption, 0);
+        return;
+      }
+      if (Date.now() - started < 15000) setTimeout(tick, 50);
+      else notify();
+    };
+    const arm = () => {
+      if (serverRenderedReact()) setTimeout(tick, 0);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm, { once: true });
+    else arm();
+  };
+  watchHydration();
 })();

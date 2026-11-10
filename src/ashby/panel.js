@@ -151,6 +151,24 @@ button{align-self:flex-end;cursor:pointer;border:0;border-radius:6px;background:
         state.error ? el('div', { className: 'out err', textContent: state.error }) : el('div', { className: 'out md' }, renderMarkdown(state.reply)))));
   };
 
+  const serverRenderedReact = () => [...document.scripts].some((script) => script.id === '__NEXT_DATA__' || (script.textContent || '').includes('window.__remixContext'));
+  const mountHost = () => {
+    if (!host.isConnected) document.documentElement.append(host);
+  };
+  // WHY: Greenhouse hydrates the whole document on idle. The card must wait for that,
+  // or React discards the server form and logs minified error 418.
+  const mountAfterHydration = () => {
+    if (!serverRenderedReact() || document.documentElement.hasAttribute('data-a2gent-hydrated')) {
+      mountHost();
+      return;
+    }
+    const timer = setTimeout(mountHost, 20000);
+    document.addEventListener('a2gent-hydrated', () => {
+      clearTimeout(timer);
+      mountHost();
+    }, { once: true });
+  };
+
   render();
-  document.documentElement.append(host);
+  mountAfterHydration();
 })();

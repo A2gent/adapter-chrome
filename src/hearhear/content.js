@@ -4,6 +4,8 @@ const send = message => chrome.runtime.sendMessage({target:'background', ...mess
 // Audio mode (default) shows the player; design and sync modes hide it so they own the page.
 const MODE_KEY = 'a2gent.adapterChrome.mode';
 let audioMode = true;
+let booted = false;
+let bootTimer = 0;
 let mounted; let href = location.href; let scheduled; let lastScan = 0;
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (message?.target !== 'content' || sender.id !== chrome.runtime.id || !['toggleVisibility','getVisibility'].includes(message.action)) return;
@@ -12,7 +14,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 function scan() {
   scheduled = null;
-  if (!audioMode) return;
+  if (!booted || !audioMode) return;
   if (location.href !== href || (mounted && !mounted.host.isConnected)) {
     mounted?.destroy(); mounted = null; href = location.href;
   }
@@ -28,7 +30,6 @@ const observer = new MutationObserver(() => {
     scheduled = setTimeout(scan, Math.max(300, 2000 - (Date.now() - lastScan)));
   }
 });
-observer.observe(document.documentElement, {childList:true, subtree:true});
 function applyMode(mode) {
   audioMode = mode !== 'design' && mode !== 'sync';
   if (audioMode) { scan(); return; }
@@ -39,13 +40,26 @@ function applyMode(mode) {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[MODE_KEY]) applyMode(changes[MODE_KEY].newValue);
 });
-chrome.storage.local.get(MODE_KEY).then(saved => applyMode(saved[MODE_KEY]));
+const serverRenderedReact = () => [...document.scripts].some((script) => script.id === '__NEXT_DATA__' || (script.textContent || '').includes('window.__remixContext'));
+const boot = () => {
+  if (booted) return;
+  booted = true;
+  observer.observe(document.documentElement, {childList:true, subtree:true});
+  chrome.storage.local.get(MODE_KEY).then(saved => applyMode(saved[MODE_KEY]));
+};
+if (document.documentElement.hasAttribute('data-a2gent-hydrated') || !serverRenderedReact()) boot();
+else {
+  bootTimer = setTimeout(boot, 20000);
+  document.addEventListener('a2gent-hydrated', () => { clearTimeout(bootTimer); boot(); }, { once: true });
+}
 let routeTimer = setInterval(() => { if (href !== location.href) scan(); }, 1500);
 addEventListener('pagehide', () => {
+  clearTimeout(bootTimer);
   observer.disconnect(); clearInterval(routeTimer); clearTimeout(scheduled); scheduled = null; mounted?.destroy(); mounted = null;
 });
 addEventListener('pageshow', event => {
   if (!event.persisted) return;
+  booted = true;
   observer.observe(document.documentElement, {childList:true, subtree:true});
   routeTimer = setInterval(() => { if (href !== location.href) scan(); }, 1500);
   scan();
